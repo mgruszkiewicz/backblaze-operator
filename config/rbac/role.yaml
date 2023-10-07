@@ -1,0 +1,33 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - b2.issei.space
+  resources:
+  - buckets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - b2.issei.space
+  resources:
+  - buckets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - b2.issei.space
+  resources:
+  - buckets/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -1,0 +1,7 @@
+apiVersion: b2.issei.space/v1alpha1
+kind: Bucket
+metadata:
+  name: b2operator-testing07102023
+spec:
+  acl: private
+  encryption: false
