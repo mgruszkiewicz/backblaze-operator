@@ -136,7 +136,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		if bucket_b2_exist == nil {
 			log.Info("Creating Bucket")
 			// Creating Bucket
-			bucket_b2, bucket_err := b2.CreateBucket(bucket.Name, bucket_acl)
+			bucket_b2, bucket_err := b2.CreateBucketWithInfo(bucket.Name, bucket_acl, make(map[string]string), bucket.Spec.BucketLifecycle)
 
 			if bucket_err != nil {
 				return fmt.Errorf("Unable to create Bucket: %v", bucket_err)
@@ -146,20 +146,22 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		} else {
 			log.Info("Bucket exist at provider, adopting")
 		}
-
+		bucket.Status.AtProvider.BucketLifecycle = bucket.Spec.BucketLifecycle
 		bucket.Status.AtProvider.Acl = bucket.Spec.Acl
-		bucket.Status.AtProvider.Encryption = bucket.Spec.Encryption
 		bucket.Status.Reconciled = true
 		r.Status().Update(ctx, bucket)
 
 		return nil
 	} else {
+		// Updating bucket
 		log.Info("Bucket resource exist on cluster, updating state")
-		if bucket.Spec.Acl != bucket.Status.AtProvider.Acl {
-			bucket_at_b2, err := b2.Bucket(bucket.Name)
-			if err != nil {
-				return fmt.Errorf("Unable to fetch Bucket: %v", err)
-			}
+
+		bucket_at_b2, err := b2.Bucket(bucket.Name)
+		if err != nil {
+			return fmt.Errorf("Unable to fetch Bucket: %v", err)
+		}
+
+		if bucket.Spec.Acl != bucket.Status.AtProvider.Acl || !StringSlicesEqual(bucket.Spec.BucketLifecycle, bucket.Status.AtProvider.BucketLifecycle) {
 			bucket_acl := backblaze.AllPrivate
 			switch bucket.Spec.Acl {
 			case "private":
@@ -168,16 +170,15 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 				bucket_acl = backblaze.AllPublic
 			}
 
-			update_err := bucket_at_b2.Update(bucket_acl)
+			update_err := bucket_at_b2.UpdateAll(bucket_acl, make(map[string]string), bucket.Spec.BucketLifecycle, 0)
 			if update_err != nil {
 				return fmt.Errorf("Unable to update Bucket: %v", update_err)
 			} else {
-				bucket.Status.AtProvider.Acl = bucket.Spec.Acl
+				bucket.Status.AtProvider = bucket.Spec
 			}
-
 			r.Status().Update(ctx, bucket)
-
 		}
+
 	}
 
 	return nil

@@ -17,11 +17,18 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"gopkg.in/kothar/go-backblaze.v0"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+type BucketLifecycle struct {
+	DaysFromUploadingToHiding int    `json:"daysfromuploadingtohiding,omitempty"`
+	DaysFromHidingToDeleting  int    `json:"daysfromhidingtodelete,omitempty"`
+	FileNamePrefix            string `json:"filenameprefix,omitempty"`
+}
 
 // BucketSpec defines the desired state of Bucket
 type BucketSpec struct {
@@ -29,8 +36,8 @@ type BucketSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Acl defines if content of this bucket should be public or private
-	Acl        string `json:"acl,omitempty"`
-	Encryption bool   `json:"encryption,omitempty"`
+	Acl             string                    `json:"acl,omitempty"`
+	BucketLifecycle []backblaze.LifecycleRule `json:"bucketlifecycle,omitempty"`
 }
 
 // BucketStatus defines the observed state of Bucket

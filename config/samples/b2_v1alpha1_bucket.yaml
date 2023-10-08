@@ -3,5 +3,11 @@ kind: Bucket
 metadata:
   name: b2operator-testing08102023-hello
 spec:
-  acl: public
-  encryption: false
+  acl: private
+  bucketlifecycle:
+    - fileNamePrefix: "/"
+      daysFromUploadingToHiding: 2
+      daysFromHidingToDeleting: 3
+    - fileNamePrefix: "anotherpath"
+      daysFromUploadingToHiding: 5
+      daysFromHidingToDeleting: 7
