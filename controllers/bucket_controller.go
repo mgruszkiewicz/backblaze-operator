@@ -104,19 +104,20 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		}
 	}
 
+	// Checking if backblaze secrets are set
+	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
+		log.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
+	}
+	// Initializing backblaze client
+	b2, _ := backblaze.NewB2(backblaze.Credentials{
+		AccountID:      os.Getenv("B2_APPLICATION_ID"),
+		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
+	})
+
 	// If bucket was not already reconciled (most likely new CR)
 	if !bucket.Status.Reconciled {
 		// Creating new bucket
 
-		// Checking if backblaze secrets are set
-		if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
-			log.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
-		}
-		// Initializing backblaze client
-		b2, _ := backblaze.NewB2(backblaze.Credentials{
-			AccountID:      os.Getenv("B2_APPLICATION_ID"),
-			ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
-		})
 		// Define bucket ACL
 		bucket_acl := backblaze.AllPrivate
 		switch bucket.Spec.Acl {
@@ -139,20 +140,44 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 
 			if bucket_err != nil {
 				return fmt.Errorf("Unable to create Bucket: %v", bucket_err)
-			} else {
-				bucket.Status.AtProvider = true
 			}
 
 			fmt.Println(string(bucket_b2.BucketType))
 		} else {
 			log.Info("Bucket exist at provider, adopting")
-			bucket.Status.AtProvider = true
 		}
 
+		bucket.Status.AtProvider.Acl = bucket.Spec.Acl
+		bucket.Status.AtProvider.Encryption = bucket.Spec.Encryption
 		bucket.Status.Reconciled = true
 		r.Status().Update(ctx, bucket)
 
 		return nil
+	} else {
+		log.Info("Bucket resource exist on cluster, updating state")
+		if bucket.Spec.Acl != bucket.Status.AtProvider.Acl {
+			bucket_at_b2, err := b2.Bucket(bucket.Name)
+			if err != nil {
+				return fmt.Errorf("Unable to fetch Bucket: %v", err)
+			}
+			bucket_acl := backblaze.AllPrivate
+			switch bucket.Spec.Acl {
+			case "private":
+				bucket_acl = backblaze.AllPrivate
+			case "public":
+				bucket_acl = backblaze.AllPublic
+			}
+
+			update_err := bucket_at_b2.Update(bucket_acl)
+			if update_err != nil {
+				return fmt.Errorf("Unable to update Bucket: %v", update_err)
+			} else {
+				bucket.Status.AtProvider.Acl = bucket.Spec.Acl
+			}
+
+			r.Status().Update(ctx, bucket)
+
+		}
 	}
 
 	return nil

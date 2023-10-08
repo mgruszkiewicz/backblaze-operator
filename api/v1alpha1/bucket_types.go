@@ -37,8 +37,8 @@ type BucketSpec struct {
 type BucketStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	AtProvider bool `json:"atprovider,omitempty"`
-	Reconciled bool `json:"reconciled,omitempty"`
+	AtProvider BucketSpec `json:"atprovider,omitempty"`
+	Reconciled bool       `json:"reconciled,omitempty"`
 }
 
 //+kubebuilder:object:root=true
