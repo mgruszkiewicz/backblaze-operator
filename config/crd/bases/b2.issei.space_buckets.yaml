@@ -58,6 +58,13 @@ spec:
                   - fileNamePrefix
                   type: object
                 type: array
+              writeconnectionsecrettoref:
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                type: object
             type: object
           status:
             description: BucketStatus defines the observed state of Bucket
@@ -90,6 +97,13 @@ spec:
                       - fileNamePrefix
                       type: object
                     type: array
+                  writeconnectionsecrettoref:
+                    properties:
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                    type: object
                 type: object
               reconciled:
                 type: boolean

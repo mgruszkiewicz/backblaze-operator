@@ -21,17 +21,18 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-logr/logr"
+	b2v1alpha1 "github.com/ihyoudou/backblaze-operator/api/v1alpha1"
 	"gopkg.in/kothar/go-backblaze.v0"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	"github.com/go-logr/logr"
-	b2v1alpha1 "github.com/ihyoudou/backblaze-operator/api/v1alpha1"
 )
 
 const bucketFinalizer = "bucket.b2.issei.space/finalizer"
@@ -46,6 +47,7 @@ type BucketReconciler struct {
 //+kubebuilder:rbac:groups=b2.issei.space,resources=buckets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=b2.issei.space,resources=buckets/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=b2.issei.space,resources=buckets/finalizers,verbs=update
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -93,6 +95,17 @@ func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alph
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *BucketReconciler) createBucketSecret(bucket *b2v1alpha1.Bucket) *corev1.Secret {
+
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      bucket.Spec.BucketWriteConnectionSecretToRef.Name,
+			Namespace: bucket.Spec.BucketWriteConnectionSecretToRef.Namespace,
+		},
+		Data: map[string][]byte{"bucketName": []byte(bucket.Name), "endpoint": []byte(fmt.Sprintf("s3.%s.backblazeb2.com", string(os.Getenv("B2_REGION"))))},
+	}
 }
 
 func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v1alpha1.Bucket) error {
@@ -150,6 +163,13 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		bucket.Status.AtProvider.Acl = bucket.Spec.Acl
 		bucket.Status.Reconciled = true
 		r.Status().Update(ctx, bucket)
+
+		// Creating secret with bucket details
+		secret := r.createBucketSecret(bucket)
+		err := r.Create(ctx, secret)
+		if err != nil {
+			log.Error(err, "Failed to create new Secret", "Secret.Namespace", secret.Namespace, "Deployment.Name", secret.Name)
+		}
 
 		return nil
 	} else {
@@ -211,6 +231,12 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 		if err != nil {
 			log.Info("Error occured while trying to remove bucket (is the bucket empty?)")
 		} else {
+			// Remove secret
+			secret := r.createBucketSecret(bucket)
+			if err := r.Delete(ctx, secret); err != nil {
+				log.Info("Failed to remove secret")
+			}
+
 			// Remove the finalizer and update the object
 			controllerutil.RemoveFinalizer(bucket, bucketFinalizer)
 			if err := r.Update(ctx, bucket); err != nil {

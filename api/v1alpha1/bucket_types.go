@@ -30,14 +30,20 @@ type BucketLifecycle struct {
 	FileNamePrefix            string `json:"filenameprefix,omitempty"`
 }
 
+type BucketWriteConnectionSecretToRef struct {
+	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+}
+
 // BucketSpec defines the desired state of Bucket
 type BucketSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Acl defines if content of this bucket should be public or private
-	Acl             string                    `json:"acl,omitempty"`
-	BucketLifecycle []backblaze.LifecycleRule `json:"bucketlifecycle,omitempty"`
+	Acl                              string                           `json:"acl,omitempty"`
+	BucketLifecycle                  []backblaze.LifecycleRule        `json:"bucketlifecycle,omitempty"`
+	BucketWriteConnectionSecretToRef BucketWriteConnectionSecretToRef `json:"writeconnectionsecrettoref,omitempty"`
 }
 
 // BucketStatus defines the observed state of Bucket

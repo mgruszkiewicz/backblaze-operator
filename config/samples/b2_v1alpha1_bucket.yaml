@@ -1,7 +1,7 @@
 apiVersion: b2.issei.space/v1alpha1
 kind: Bucket
 metadata:
-  name: b2operator-testing08102023-hello
+  name: b2operator-testing16102023-hello
 spec:
   acl: private
   bucketlifecycle:
@@ -11,3 +11,6 @@ spec:
     - fileNamePrefix: "anotherpath"
       daysFromUploadingToHiding: 5
       daysFromHidingToDeleting: 7
+  writeconnectionsecrettoref:
+    name: "test"
+    namespace: "default"
