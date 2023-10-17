@@ -1,8 +1,18 @@
+| :exclamation:  This project is currently highly work in progress   |
+|--------------------------------------------------------------------|
+
 # Backblaze Operator
-// TODO(user): Add simple overview of use/purpose
+Simple Backblaze B2 Operator for Kubernetes
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+This project started as a test bed for me to learn operator-sdk. As of right now, it supports  
+- [x] Creating and deleting B2 bucket  
+- [x] Set and update bucket ACL  
+- [x] Setting lifecycle policy on bucket  
+
+Currently work in progress:  
+- [ ] Creating and writing application keys to secret  
+
 
 ## Getting Started
 You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
@@ -42,7 +52,7 @@ make undeploy
 ```
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
+Any contribution, tips and tricks are highly apperated
 
 ### How it works
 This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
