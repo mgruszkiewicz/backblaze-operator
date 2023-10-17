@@ -9,9 +9,7 @@ This project started as a test bed for me to learn operator-sdk. As of right now
 - [x] Creating and deleting B2 bucket  
 - [x] Set and update bucket ACL  
 - [x] Setting lifecycle policy on bucket  
-
-Currently work in progress:  
-- [ ] Creating and writing application keys to secret  
+- [x] Creating and writing application keys to secret  
 
 
 ## Getting Started

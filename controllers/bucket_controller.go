@@ -23,7 +23,7 @@ import (
 
 	"github.com/go-logr/logr"
 	b2v1alpha1 "github.com/ihyoudou/backblaze-operator/api/v1alpha1"
-	"gopkg.in/kothar/go-backblaze.v0"
+	"github.com/ihyoudou/go-backblaze"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,14 +97,21 @@ func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alph
 	return ctrl.Result{}, nil
 }
 
-func (r *BucketReconciler) createBucketSecret(bucket *b2v1alpha1.Bucket) *corev1.Secret {
+func (r *BucketReconciler) createBucketSecret(bucket *b2v1alpha1.Bucket, appkey *backblaze.ApplicationKeyResponse) *corev1.Secret {
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      bucket.Spec.BucketWriteConnectionSecretToRef.Name,
 			Namespace: bucket.Spec.BucketWriteConnectionSecretToRef.Namespace,
 		},
-		Data: map[string][]byte{"bucketName": []byte(bucket.Name), "endpoint": []byte(fmt.Sprintf("s3.%s.backblazeb2.com", string(os.Getenv("B2_REGION"))))},
+		Data: map[string][]byte{
+			"bucketName": []byte(bucket.Name),
+			"endpoint":   []byte(fmt.Sprintf("s3.%s.backblazeb2.com", string(os.Getenv("B2_REGION")))),
+			"keyName":    []byte(appkey.KeyName),
+			// AWS S3 compatibile variables
+			"AWS_ACCESS_KEY_ID":     []byte(appkey.ApplicationKeyId),
+			"AWS_SECRET_ACCESS_KEY": []byte(appkey.ApplicationKey),
+		},
 	}
 }
 
@@ -129,6 +136,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 
 	// If bucket was not already reconciled (most likely new CR)
 	if !bucket.Status.Reconciled {
+		var b2_bucket_id string
 		// Creating new bucket
 
 		// Define bucket ACL
@@ -154,9 +162,10 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 			if bucket_err != nil {
 				return fmt.Errorf("Unable to create Bucket: %v", bucket_err)
 			}
+			b2_bucket_id = bucket_b2.ID
 
-			fmt.Println(string(bucket_b2.BucketType))
 		} else {
+			b2_bucket_id = bucket_b2_exist.ID
 			log.Info("Bucket exist at provider, adopting")
 		}
 		bucket.Status.AtProvider.BucketLifecycle = bucket.Spec.BucketLifecycle
@@ -165,9 +174,21 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		r.Status().Update(ctx, bucket)
 
 		// Creating secret with bucket details
-		secret := r.createBucketSecret(bucket)
-		err := r.Create(ctx, secret)
+		applicationKeyCreate, err := b2.CreateApplicationKey(&backblaze.CreateKeyRequest{
+			KeyName: bucket.Name,
+			Capabilities: []string{"deleteFiles", "listAllBucketNames", "listBuckets",
+				"listFiles", "readBucketEncryption", "readBucketReplications",
+				"readBuckets", "readFiles", "shareFiles", "writeBucketEncryption",
+				"writeBucketReplications", "writeFiles"},
+			BucketId: b2_bucket_id,
+		})
 		if err != nil {
+			log.Error(err, "Failed to create application key")
+		}
+
+		secret := r.createBucketSecret(bucket, applicationKeyCreate)
+
+		if err := r.Create(ctx, secret); err != nil {
 			log.Error(err, "Failed to create new Secret", "Secret.Namespace", secret.Namespace, "Deployment.Name", secret.Name)
 		}
 
@@ -231,9 +252,25 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 		if err != nil {
 			log.Info("Error occured while trying to remove bucket (is the bucket empty?)")
 		} else {
+			// Retriving existing secret
+			existing_secret := &corev1.Secret{}
+			err := r.Client.Get(ctx, types.NamespacedName{
+				Name:      bucket.Spec.BucketWriteConnectionSecretToRef.Name,
+				Namespace: bucket.Spec.BucketWriteConnectionSecretToRef.Namespace},
+				existing_secret,
+			)
+			if err != nil {
+				log.Error(err, "Failed to read existing secret")
+			}
+
+			// Deleting application key on b2
+			_, err = b2.DeleteApplicationKey(string(existing_secret.Data["AWS_ACCESS_KEY_ID"]))
+			if err != nil {
+				log.Error(err, "Failed to delete application key")
+			}
+
 			// Remove secret
-			secret := r.createBucketSecret(bucket)
-			if err := r.Delete(ctx, secret); err != nil {
+			if err := r.Delete(ctx, existing_secret); err != nil {
 				log.Info("Failed to remove secret")
 			}
 

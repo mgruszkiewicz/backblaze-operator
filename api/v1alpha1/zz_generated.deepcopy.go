@@ -22,7 +22,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	go_backblaze_v0 "gopkg.in/kothar/go-backblaze.v0"
+	go_backblaze "github.com/ihyoudou/go-backblaze"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -105,7 +105,7 @@ func (in *BucketSpec) DeepCopyInto(out *BucketSpec) {
 	*out = *in
 	if in.BucketLifecycle != nil {
 		in, out := &in.BucketLifecycle, &out.BucketLifecycle
-		*out = make([]go_backblaze_v0.LifecycleRule, len(*in))
+		*out = make([]go_backblaze.LifecycleRule, len(*in))
 		copy(*out, *in)
 	}
 	out.BucketWriteConnectionSecretToRef = in.BucketWriteConnectionSecretToRef
