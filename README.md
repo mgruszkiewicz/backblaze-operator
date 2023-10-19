@@ -17,37 +17,36 @@ You’ll need a Kubernetes cluster to run against. You can use [KIND](https://si
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
 
 ### Running on the cluster
-1. Install Instances of Custom Resources:
+As of right now, there is not yet a Helm Chart to easily deploy this operator, but you can use Kustomize and kubectl apply
 
-```sh
-kubectl apply -f config/samples/
+0. Clone this repository  
+
+1. Create Master Application Key in Backblaze dashboard, base64 encode these credentials and put them in `config/manager/secret.yaml`
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: credentials
+type: Opaque
+data:
+  B2_REGION: dXMtd2VzdC0wMDQ=  # us-west-004
+  B2_APPLICATION_ID: ZXhhbXBsZQ==
+  B2_APPLICATION_KEY: ZXhhbXBsZQ==
+
 ```
-
-2. Build and push your image to the location specified by `IMG`:
-
-```sh
-make docker-build docker-push IMG=<some-registry>/b2operator:tag
-```
-
-3. Deploy the controller to the cluster with the image specified by `IMG`:
+2. Install Instances of Custom Resources:
 
 ```sh
-make deploy IMG=<some-registry>/b2operator:tag
+kustomize build config/default | kubectl apply -f -
 ```
 
 ### Uninstall CRDs
 To delete the CRDs from the cluster:
 
 ```sh
-make uninstall
+kustomize build config/default | kubectl delete -f -
 ```
 
-### Undeploy controller
-UnDeploy the controller from the cluster:
-
-```sh
-make undeploy
-```
 
 ## Contributing
 Any contribution, tips and tricks are highly apperated
