@@ -17,7 +17,7 @@ You’ll need a Kubernetes cluster to run against. You can use [KIND](https://si
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
 
 ### Running on the cluster
-As of right now, there is not yet a Helm Chart to easily deploy this operator, but you can use Kustomize and kubectl apply
+As of right now, there is not yet a Helm Chart to easily deploy this operator, but you can use Kustomize and kubectl apply.
 
 0. Clone this repository  
 
@@ -47,6 +47,26 @@ To delete the CRDs from the cluster:
 kustomize build config/default | kubectl delete -f -
 ```
 
+### Example CRD Usage
+
+```yaml
+apiVersion: b2.issei.space/v1alpha1
+kind: Bucket
+metadata:
+  name: my-b2-bucket
+spec:
+  acl: public
+  bucketlifecycle:
+    - fileNamePrefix: "/"
+      daysFromUploadingToHiding: 2
+      daysFromHidingToDeleting: 3
+    - fileNamePrefix: "logs"
+      daysFromUploadingToHiding: 5
+      daysFromHidingToDeleting: 7
+  writeConnectionSecretToRef:
+    name: my-bucket-credentials
+    namespace: default
+```
 
 ## Contributing
 Any contribution, tips and tricks are highly apperated

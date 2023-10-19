@@ -1,16 +1,16 @@
 apiVersion: b2.issei.space/v1alpha1
 kind: Bucket
 metadata:
-  name: b2operator-testing16102023
+  name: my-b2-bucket
 spec:
   acl: public
   bucketlifecycle:
     - fileNamePrefix: "/"
       daysFromUploadingToHiding: 2
       daysFromHidingToDeleting: 3
-    - fileNamePrefix: "anotherpath"
+    - fileNamePrefix: "logs"
       daysFromUploadingToHiding: 5
       daysFromHidingToDeleting: 7
-  writeconnectionsecrettoref:
-    name: "test"
-    namespace: "default"
+  writeConnectionSecretToRef:
+    name: my-bucket-credentials
+    namespace: default

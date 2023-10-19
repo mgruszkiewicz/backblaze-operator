@@ -25,9 +25,9 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type BucketLifecycle struct {
-	DaysFromUploadingToHiding int    `json:"daysfromuploadingtohiding,omitempty"`
-	DaysFromHidingToDeleting  int    `json:"daysfromhidingtodelete,omitempty"`
-	FileNamePrefix            string `json:"filenameprefix,omitempty"`
+	DaysFromUploadingToHiding int    `json:"daysFromUploadingToHiding,omitempty"`
+	DaysFromHidingToDeleting  int    `json:"daysFromHidingToDeleting,omitempty"`
+	FileNamePrefix            string `json:"fileNamePrefix,omitempty"`
 }
 
 type BucketWriteConnectionSecretToRef struct {
@@ -42,15 +42,15 @@ type BucketSpec struct {
 
 	// Acl defines if content of this bucket should be public or private
 	Acl                              string                           `json:"acl,omitempty"`
-	BucketLifecycle                  []backblaze.LifecycleRule        `json:"bucketlifecycle,omitempty"`
-	BucketWriteConnectionSecretToRef BucketWriteConnectionSecretToRef `json:"writeconnectionsecrettoref,omitempty"`
+	BucketLifecycle                  []backblaze.LifecycleRule        `json:"bucketLifecycle,omitempty"`
+	BucketWriteConnectionSecretToRef BucketWriteConnectionSecretToRef `json:"writeConnectionSecretToRef,omitempty"`
 }
 
 // BucketStatus defines the observed state of Bucket
 type BucketStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	AtProvider BucketSpec `json:"atprovider,omitempty"`
+	AtProvider BucketSpec `json:"atProvider,omitempty"`
 	Reconciled bool       `json:"reconciled,omitempty"`
 }
 
