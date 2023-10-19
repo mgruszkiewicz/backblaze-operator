@@ -28,8 +28,8 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # This variable is used to construct full image tags for bundle and catalog images.
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
-# issei.space/b2operator-bundle:$VERSION and issei.space/b2operator-catalog:$VERSION.
-IMAGE_TAG_BASE ?= issei.space/b2operator
+# ghcr.io/ihyoudou/backblaze-operator-bundle:$VERSION and ghcr.io/ihyoudou/backblaze-operator-catalog:$VERSION.
+IMAGE_TAG_BASE ?= ghcr.io/ihyoudou/backblaze-operator
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
@@ -136,7 +136,7 @@ docker-push: ## Push docker image with the manager.
 # - have enable BuildKit, More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image for your registry (i.e. if you do not inform a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To properly provided solutions that supports more than one platform you should use this option.
-PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
+PLATFORMS ?= linux/arm64,linux/amd64
 .PHONY: docker-buildx
 docker-buildx: test ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile

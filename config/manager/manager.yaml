@@ -70,7 +70,7 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: controller:latest
+        image: ghcr.io/ihyoudou/backblaze-operator:latest
         name: manager
         securityContext:
           allowPrivilegeEscalation: false
@@ -98,5 +98,8 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
+        envFrom:
+          - secretRef:
+              name: credentials
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
