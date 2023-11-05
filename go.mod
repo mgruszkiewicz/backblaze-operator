@@ -31,6 +31,7 @@ require (
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/google/readahead v0.0.0-20161222183148-eaceba169032 // indirect
 	github.com/google/uuid v1.1.2 // indirect
+	github.com/ihyoudou/go-backblaze v0.0.0-20231017173531-c411c682f5eb // indirect
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
