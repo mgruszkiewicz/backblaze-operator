@@ -1,6 +1,3 @@
-| :exclamation:  This project is currently highly work in progress   |
-|--------------------------------------------------------------------|
-
 # Backblaze Operator
 Simple Backblaze B2 Operator for Kubernetes
 
@@ -17,7 +14,23 @@ You’ll need a Kubernetes cluster to run against. You can use [KIND](https://si
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
 
 ### Running on the cluster
-As of right now, there is not yet a Helm Chart to easily deploy this operator, but you can use Kustomize and kubectl apply.
+
+**Using Helm** 
+
+You can add repository using command
+```
+helm repo add isseispace https://ihyoudou.github.io/helm-charts
+helm repo update
+```
+To install a release named `b2operator` run:
+```
+helm install b2operator isseispace/backblaze-operator \
+--set credentials.b2ApplicationId="your-application-id" \
+--set credentials.b2ApplicationKey="your-application-key" \
+--set credentials.b2Region="us-west-004" \
+--namespace b2operator --create-namespace
+```
+**Using manifests**
 
 0. Clone this repository  
 
@@ -56,7 +69,7 @@ metadata:
   name: my-b2-bucket
 spec:
   acl: public
-  bucketlifecycle:
+  bucketLifecycle:
     - fileNamePrefix: "/"
       daysFromUploadingToHiding: 2
       daysFromHidingToDeleting: 3
