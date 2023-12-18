@@ -49,6 +49,9 @@ jobs:
 
       - name: Build image
         run: |
-          ls -la
           make docker-buildx IMG=ghcr.io/ihyoudou/backblaze-operator:${{github.ref_name}}
-        
+
+      - name: Scan for vulnerabilities
+        uses: crazy-max/ghaction-container-scan@v3
+        with:
+          image: ghcr.io/ihyoudou/backblaze-operator:${{github.ref_name}}
