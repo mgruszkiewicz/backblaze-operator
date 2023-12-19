@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	b2v1alpha1 "github.com/ihyoudou/backblaze-operator/api/v1alpha1"
@@ -31,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -97,7 +97,7 @@ func (r *KeyReconciler) createKeySecret(key *b2v1alpha1.Key, appkey *backblaze.A
 			Namespace: key.Spec.WriteConnectionSecretToRef.Namespace,
 		},
 		Data: map[string][]byte{
-			"bucketName": []byte(key.Spec.BucketId),
+			"bucketName": []byte(key.Spec.BucketName),
 			"endpoint":   []byte(fmt.Sprintf("s3.%s.backblazeb2.com", string(os.Getenv("B2_REGION")))),
 			"keyName":    []byte(appkey.KeyName),
 			// AWS S3 compatibile variables
@@ -132,6 +132,7 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 
 		// Checking which setting was set, BucketId vs BucketName
 		// If BucketName is set, we need to get BucketId from backblaze
+		// TODO: check if bucket already exist
 		if key.Spec.BucketId == "" {
 			bucket_b2, err := b2.Bucket(key.Spec.BucketName)
 			if err != nil {
@@ -142,7 +143,7 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 			bucketId = key.Spec.BucketId
 		}
 
-		// Creating secret with bucket details
+		// Creating application key
 		applicationKeyCreate, err := b2.CreateApplicationKey(&backblaze.CreateKeyRequest{
 			KeyName:      key.Name,
 			Capabilities: key.Spec.Capabilities,
@@ -152,48 +153,38 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 			log.Error(err, "Failed to create application key")
 		}
 
+		// Updating CRD status
+		key.Status.Reconciled = true
+		key.Status.BucketId = bucketId
+		key.Status.KeyId = applicationKeyCreate.ApplicationKeyId
+		key.Status.AtProvider = key.Spec
+		r.Status().Update(ctx, key)
+
+		// Creating secret with credentials
 		secret := r.createKeySecret(key, applicationKeyCreate)
 
 		if err := r.Create(ctx, secret); err != nil {
 			log.Error(err, "Failed to create new Secret", "Secret.Namespace", secret.Namespace, "Deployment.Name", secret.Name)
 		}
-		key.Status.Reconciled = true
-		r.Status().Update(ctx, key)
 
 		return nil
-	} //else {
-	// 	// Updating key
-	// 	log.Info("Key resource exist on cluster, updating state")
+	} else {
+		// Backblaze doesn't support updating keys, so we need to recreate it
+		if !reflect.DeepEqual(key.Spec, key.Status.AtProvider) {
+			log.Info("Key resource exist on cluster, updating state")
+			r.reconcileDelete(ctx, key)
+			key.Status.Reconciled = false
+			r.Status().Update(ctx, key)
+			r.createOrUpdateKey(ctx, key)
+		}
 
-	// 	bucket_at_b2, err := b2.Bucket(bucket.Name)
-	// 	if err != nil {
-	// 		return fmt.Errorf("Unable to fetch Bucket: %v", err)
-	// 	}
-
-	// 	if bucket.Spec.Acl != bucket.Status.AtProvider.Acl || !StringSlicesEqual(bucket.Spec.BucketLifecycle, bucket.Status.AtProvider.BucketLifecycle) {
-	// 		bucket_acl := backblaze.AllPrivate
-	// 		switch bucket.Spec.Acl {
-	// 		case "private":
-	// 			bucket_acl = backblaze.AllPrivate
-	// 		case "public":
-	// 			bucket_acl = backblaze.AllPublic
-	// 		}
-
-	// 		update_err := bucket_at_b2.UpdateAll(bucket_acl, make(map[string]string), bucket.Spec.BucketLifecycle, 0)
-	// 		if update_err != nil {
-	// 			return fmt.Errorf("Unable to update Bucket: %v", update_err)
-	// 		} else {
-	// 			bucket.Status.AtProvider = bucket.Spec
-	// 		}
-	// 		r.Status().Update(ctx, bucket)
-	// 	}
-
-	// }
+	}
 
 	return nil
 }
 
 func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key) (ctrl.Result, error) {
+
 	log := r.Log.WithValues("key", key.Namespace)
 	log.Info("Removing Key")
 	// Checking if backblaze secrets are set
@@ -214,29 +205,27 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key
 		existing_secret,
 	); err != nil {
 		log.Error(err, "Failed to get existing secret at cluster")
+	} else {
+		// Remove secret
+		if err := r.Delete(ctx, existing_secret); err != nil {
+			log.Error(err, "Failed to remove secret")
+		} else {
+			log.Info("Deleted secret at cluster")
+		}
 	}
 
 	// Deleting application key on b2
-	_, err := b2.DeleteApplicationKey(string(existing_secret.Data["AWS_ACCESS_KEY_ID"]))
+	_, err := b2.DeleteApplicationKey(key.Status.KeyId)
 	if err != nil {
 		log.Error(err, "Failed to delete application key")
 	} else {
 		log.Info("Deleted Application Key at provider")
 	}
 
-	// Remove secret
-	if err := r.Delete(ctx, existing_secret); err != nil {
-		log.Error(err, "Failed to remove secret")
-	} else {
-		log.Info("Deleted secret at cluster")
-	}
-
 	// Remove the finalizer and update the object
 	controllerutil.RemoveFinalizer(key, keyFinalizer)
 	if err := r.Update(ctx, key); err != nil {
 		return ctrl.Result{}, fmt.Errorf("Error removing finalizer: %v", err)
-	} else {
-		log.Info("Updated key resource")
 	}
 
 	return ctrl.Result{}, nil
@@ -246,6 +235,5 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key
 func (r *KeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&b2v1alpha1.Key{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
 		Complete(r)
 }

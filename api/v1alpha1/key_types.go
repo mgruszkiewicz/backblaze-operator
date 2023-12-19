@@ -44,8 +44,10 @@ type KeySpec struct {
 type KeyStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	AtProvider BucketSpec `json:"atProvider,omitempty"`
-	Reconciled bool       `json:"reconciled,omitempty"`
+	AtProvider KeySpec `json:"atProvider,omitempty"`
+	Reconciled bool    `json:"reconciled,omitempty"`
+	KeyId      string  `json:"keyId,omitempty"`
+	BucketId   string  `json:"bucketId,omitempty"`
 }
 
 //+kubebuilder:object:root=true

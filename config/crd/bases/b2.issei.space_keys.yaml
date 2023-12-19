@@ -65,29 +65,21 @@ spec:
                   of cluster Important: Run "make" to regenerate code after modifying
                   this file'
                 properties:
-                  acl:
-                    description: Acl defines if content of this bucket should be public
-                      or private
+                  bucketId:
                     type: string
-                  bucketLifecycle:
+                  bucketName:
+                    type: string
+                  capabilities:
+                    description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of
+                      cluster Important: Run "make" to regenerate code after modifying
+                      this file'
                     items:
-                      description: LifecycleRule instructs the B2 service to automatically
-                        hide and/or delete old files. You can set up rules to do things
-                        like delete old versions of files 30 days after a newer version
-                        was uploaded.
-                      properties:
-                        daysFromHidingToDeleting:
-                          type: integer
-                        daysFromUploadingToHiding:
-                          type: integer
-                        fileNamePrefix:
-                          type: string
-                      required:
-                      - daysFromHidingToDeleting
-                      - daysFromUploadingToHiding
-                      - fileNamePrefix
-                      type: object
+                      type: string
                     type: array
+                  namePrefix:
+                    type: string
+                  validDurationInSeconds:
+                    type: integer
                   writeConnectionSecretToRef:
                     properties:
                       name:
@@ -96,6 +88,10 @@ spec:
                         type: string
                     type: object
                 type: object
+              bucketId:
+                type: string
+              keyId:
+                type: string
               reconciled:
                 type: boolean
             type: object
