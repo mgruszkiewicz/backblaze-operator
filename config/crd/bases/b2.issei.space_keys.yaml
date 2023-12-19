@@ -1,0 +1,106 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.11.1
+  creationTimestamp: null
+  name: keys.b2.issei.space
+spec:
+  group: b2.issei.space
+  names:
+    kind: Key
+    listKind: KeyList
+    plural: keys
+    singular: key
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Key is the Schema for the keys API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: KeySpec defines the desired state of Key
+            properties:
+              bucketId:
+                type: string
+              bucketName:
+                type: string
+              capabilities:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file'
+                items:
+                  type: string
+                type: array
+              namePrefix:
+                type: string
+              validDurationInSeconds:
+                type: integer
+              writeConnectionSecretToRef:
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                type: object
+            type: object
+          status:
+            description: KeyStatus defines the observed state of Key
+            properties:
+              atProvider:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                properties:
+                  acl:
+                    description: Acl defines if content of this bucket should be public
+                      or private
+                    type: string
+                  bucketLifecycle:
+                    items:
+                      description: LifecycleRule instructs the B2 service to automatically
+                        hide and/or delete old files. You can set up rules to do things
+                        like delete old versions of files 30 days after a newer version
+                        was uploaded.
+                      properties:
+                        daysFromHidingToDeleting:
+                          type: integer
+                        daysFromUploadingToHiding:
+                          type: integer
+                        fileNamePrefix:
+                          type: string
+                      required:
+                      - daysFromHidingToDeleting
+                      - daysFromUploadingToHiding
+                      - fileNamePrefix
+                      type: object
+                    type: array
+                  writeConnectionSecretToRef:
+                    properties:
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                    type: object
+                type: object
+              reconciled:
+                type: boolean
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

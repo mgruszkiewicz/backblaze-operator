@@ -1,0 +1,12 @@
+apiVersion: b2.issei.space/v1alpha1
+kind: Key
+metadata:
+  labels:
+    app.kubernetes.io/name: key
+    app.kubernetes.io/instance: key-sample
+    app.kubernetes.io/part-of: b2operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: b2operator
+  name: key-sample
+spec:
+  # TODO(user): Add fields here

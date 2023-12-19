@@ -32,6 +32,32 @@ rules:
   - patch
   - update
 - apiGroups:
+  - b2.issei.space
+  resources:
+  - keys
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - b2.issei.space
+  resources:
+  - keys/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - b2.issei.space
+  resources:
+  - keys/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - ""
   resources:
   - secrets
