@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -156,6 +157,8 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 		if err := r.Create(ctx, secret); err != nil {
 			log.Error(err, "Failed to create new Secret", "Secret.Namespace", secret.Namespace, "Deployment.Name", secret.Name)
 		}
+		key.Status.Reconciled = true
+		r.Status().Update(ctx, key)
 
 		return nil
 	} //else {
@@ -205,27 +208,35 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key
 
 	// Retriving existing secret
 	existing_secret := &corev1.Secret{}
-	err := r.Client.Get(ctx, types.NamespacedName{
+	if err := r.Client.Get(ctx, types.NamespacedName{
 		Name:      key.Spec.WriteConnectionSecretToRef.Name,
 		Namespace: key.Spec.WriteConnectionSecretToRef.Namespace},
 		existing_secret,
-	)
+	); err != nil {
+		log.Error(err, "Failed to get existing secret at cluster")
+	}
 
 	// Deleting application key on b2
-	_, err = b2.DeleteApplicationKey(string(existing_secret.Data["AWS_ACCESS_KEY_ID"]))
+	_, err := b2.DeleteApplicationKey(string(existing_secret.Data["AWS_ACCESS_KEY_ID"]))
 	if err != nil {
 		log.Error(err, "Failed to delete application key")
+	} else {
+		log.Info("Deleted Application Key at provider")
 	}
 
 	// Remove secret
 	if err := r.Delete(ctx, existing_secret); err != nil {
-		log.Info("Failed to remove secret")
+		log.Error(err, "Failed to remove secret")
+	} else {
+		log.Info("Deleted secret at cluster")
 	}
 
 	// Remove the finalizer and update the object
-	controllerutil.RemoveFinalizer(key, bucketFinalizer)
+	controllerutil.RemoveFinalizer(key, keyFinalizer)
 	if err := r.Update(ctx, key); err != nil {
 		return ctrl.Result{}, fmt.Errorf("Error removing finalizer: %v", err)
+	} else {
+		log.Info("Updated key resource")
 	}
 
 	return ctrl.Result{}, nil
@@ -235,5 +246,6 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key
 func (r *KeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&b2v1alpha1.Key{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
 		Complete(r)
 }
