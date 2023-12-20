@@ -111,10 +111,10 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 	log := r.Log.WithValues("key", key.Namespace)
 	log.Info("create or update key")
 
-	// Check if the bucket exists
+	// Check if the key exists
 	if err := r.Get(ctx, types.NamespacedName{Name: key.Name, Namespace: key.Namespace}, key); err != nil {
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("Unable to fetch Bucket: %v", err)
+			return fmt.Errorf("unable to fetch Key: %v", err)
 		}
 	}
 
@@ -173,24 +173,22 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 		log.Info("Key is reconciled")
 		if !reflect.DeepEqual(key.Spec, key.Status.AtProvider) && !key.Status.ToRecreate {
 			log.Info("Key resource exist on cluster, updating state")
-			// Deleting key
-			// _, err := r.reconcileDelete(ctx, key)
-			// if err != nil {
-			// 	log.Error(err, "Failed to delete secret")
-			// }
-
+			// Updating resource at cluster
 			key.Status.Reconciled = false
-			// log.Info("add status")
 			key.Status.ToRecreate = true
+			r.Status().Update(ctx, key)
+
+			// Deleting key
+			_, err := r.reconcileDelete(ctx, key)
+			if err != nil {
+				log.Error(err, "Failed to delete secret")
+			}
 
 			keyerr := r.createOrUpdateKey(ctx, key)
 			if keyerr != nil {
 				log.Error(keyerr, "Failed to recreate key")
 			}
 
-			log.Info("save status")
-			// Updating resource at cluster
-			r.Status().Update(ctx, key)
 		}
 	}
 
