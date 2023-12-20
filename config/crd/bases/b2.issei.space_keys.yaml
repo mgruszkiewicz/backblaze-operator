@@ -60,6 +60,9 @@ spec:
           status:
             description: KeyStatus defines the observed state of Key
             properties:
+              ToRecreate:
+                default: false
+                type: boolean
               atProvider:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying
@@ -93,6 +96,7 @@ spec:
               keyId:
                 type: string
               reconciled:
+                default: false
                 type: boolean
             type: object
         type: object

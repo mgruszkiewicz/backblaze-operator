@@ -72,7 +72,7 @@ func (r *KeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	if !key.DeletionTimestamp.IsZero() {
-		log.Info("key is being deleted")
+		log.Info("Key is being deleted")
 		return r.reconcileDelete(ctx, key)
 	}
 	r.reconcileCreate(ctx, key)
@@ -109,10 +109,12 @@ func (r *KeyReconciler) createKeySecret(key *b2v1alpha1.Key, appkey *backblaze.A
 
 func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.Key) error {
 	log := r.Log.WithValues("key", key.Namespace)
-	// Check if the key exists
+	log.Info("create or update key")
+
+	// Check if the bucket exists
 	if err := r.Get(ctx, types.NamespacedName{Name: key.Name, Namespace: key.Namespace}, key); err != nil {
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("Unable to fetch Key: %v", err)
+			return fmt.Errorf("Unable to fetch Bucket: %v", err)
 		}
 	}
 
@@ -120,6 +122,7 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
 		log.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
 	}
+
 	// Initializing backblaze client
 	b2, _ := backblaze.NewB2(backblaze.Credentials{
 		AccountID:      os.Getenv("B2_APPLICATION_ID"),
@@ -127,57 +130,68 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 	})
 
 	// If key was not already reconciled (most likely new CR)
-	if !key.Status.Reconciled {
-		var bucketId string
+	if !key.Status.Reconciled || key.Status.ToRecreate {
+		log.Info("Key is not reconciled")
+		var b2_bucket_id string
 
-		// Checking which setting was set, BucketId vs BucketName
-		// If BucketName is set, we need to get BucketId from backblaze
-		// TODO: check if bucket already exist
-		if key.Spec.BucketId == "" {
-			bucket_b2, err := b2.Bucket(key.Spec.BucketName)
-			if err != nil {
-				log.Error(err, "Failed to get Bucket ", key.Spec.BucketName)
+		if key.Spec.BucketName != "" {
+			bucket_b2, bucket_b2_err := b2.Bucket(key.Spec.BucketName)
+			if bucket_b2_err != nil {
+				log.Error(bucket_b2_err, "Failed to find bucket at provider")
 			}
-			bucketId = bucket_b2.ID
+			b2_bucket_id = bucket_b2.ID
 		} else {
-			bucketId = key.Spec.BucketId
+			b2_bucket_id = key.Spec.BucketId
 		}
 
-		// Creating application key
+		// Create application key
 		applicationKeyCreate, err := b2.CreateApplicationKey(&backblaze.CreateKeyRequest{
 			KeyName:      key.Name,
 			Capabilities: key.Spec.Capabilities,
-			BucketId:     bucketId,
+			BucketId:     b2_bucket_id,
 		})
 		if err != nil {
-			log.Error(err, "Failed to create application key")
+			log.Error(err, "Unable to create application key at provider")
 		}
 
-		// Updating CRD status
+		if applicationKeyCreate.ApplicationKeyId != "" {
+			log.Info("Got application key id from provider, creating secret")
+			secret := r.createKeySecret(key, applicationKeyCreate)
+			if err := r.Create(ctx, secret); err != nil {
+				log.Error(err, "Failed to create new Secret", "Secret.Namespace", secret.Namespace, "Deployment.Name", secret.Name)
+			}
+		}
+
+		// Saving reconcilation and provider config
 		key.Status.Reconciled = true
-		key.Status.BucketId = bucketId
-		key.Status.KeyId = applicationKeyCreate.ApplicationKeyId
+		key.Status.ToRecreate = false
 		key.Status.AtProvider = key.Spec
+		key.Status.KeyId = applicationKeyCreate.ApplicationKeyId
 		r.Status().Update(ctx, key)
-
-		// Creating secret with credentials
-		secret := r.createKeySecret(key, applicationKeyCreate)
-
-		if err := r.Create(ctx, secret); err != nil {
-			log.Error(err, "Failed to create new Secret", "Secret.Namespace", secret.Namespace, "Deployment.Name", secret.Name)
-		}
-
-		return nil
 	} else {
-		// Backblaze doesn't support updating keys, so we need to recreate it
-		if !reflect.DeepEqual(key.Spec, key.Status.AtProvider) {
+		// reconciling loop
+		log.Info("Key is reconciled")
+		if !reflect.DeepEqual(key.Spec, key.Status.AtProvider) && !key.Status.ToRecreate {
 			log.Info("Key resource exist on cluster, updating state")
-			r.reconcileDelete(ctx, key)
-			key.Status.Reconciled = false
-			r.Status().Update(ctx, key)
-			r.createOrUpdateKey(ctx, key)
-		}
+			// Deleting key
+			// _, err := r.reconcileDelete(ctx, key)
+			// if err != nil {
+			// 	log.Error(err, "Failed to delete secret")
+			// }
 
+			key.Status.Reconciled = false
+			// log.Info("add status")
+			key.Status.ToRecreate = true
+
+			keyerr := r.createOrUpdateKey(ctx, key)
+			if keyerr != nil {
+				log.Error(keyerr, "Failed to recreate key")
+			}
+
+			log.Info("save status")
+			// Updating resource at cluster
+			r.Status().Update(ctx, key)
+		}
 	}
 
 	return nil
@@ -187,15 +201,6 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key
 
 	log := r.Log.WithValues("key", key.Namespace)
 	log.Info("Removing Key")
-	// Checking if backblaze secrets are set
-	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
-		log.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
-	}
-	// Initializing backblaze client
-	b2, _ := backblaze.NewB2(backblaze.Credentials{
-		AccountID:      os.Getenv("B2_APPLICATION_ID"),
-		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
-	})
 
 	// Retriving existing secret
 	existing_secret := &corev1.Secret{}
@@ -204,7 +209,7 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key
 		Namespace: key.Spec.WriteConnectionSecretToRef.Namespace},
 		existing_secret,
 	); err != nil {
-		log.Error(err, "Failed to get existing secret at cluster")
+		log.Info("Failed to get existing secret at cluster")
 	} else {
 		// Remove secret
 		if err := r.Delete(ctx, existing_secret); err != nil {
@@ -213,6 +218,17 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key
 			log.Info("Deleted secret at cluster")
 		}
 	}
+
+	// Checking if backblaze secrets are set
+	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
+		log.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
+	}
+
+	// Initializing backblaze client
+	b2, _ := backblaze.NewB2(backblaze.Credentials{
+		AccountID:      os.Getenv("B2_APPLICATION_ID"),
+		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
+	})
 
 	// Deleting application key on b2
 	_, err := b2.DeleteApplicationKey(key.Status.KeyId)

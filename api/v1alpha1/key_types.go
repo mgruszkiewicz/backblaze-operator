@@ -32,11 +32,12 @@ type WriteConnectionSecretToRef struct {
 type KeySpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Capabilities               []string                   `json:"capabilities,omitempty"`
-	ValidDurationInSeconds     int                        `json:"validDurationInSeconds,omitempty"`
-	BucketName                 string                     `json:"bucketName,omitempty"`
-	BucketId                   string                     `json:"bucketId,omitempty"`
-	NamePrefix                 string                     `json:"namePrefix,omitempty"`
+	Capabilities           []string `json:"capabilities,omitempty"`
+	ValidDurationInSeconds int      `json:"validDurationInSeconds,omitempty"`
+	BucketName             string   `json:"bucketName,omitempty"`
+	BucketId               string   `json:"bucketId,omitempty"`
+	NamePrefix             string   `json:"namePrefix,omitempty"`
+	//+kubebuilder:validation:Optional
 	WriteConnectionSecretToRef WriteConnectionSecretToRef `json:"writeConnectionSecretToRef,omitempty"`
 }
 
@@ -45,9 +46,12 @@ type KeyStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	AtProvider KeySpec `json:"atProvider,omitempty"`
-	Reconciled bool    `json:"reconciled,omitempty"`
-	KeyId      string  `json:"keyId,omitempty"`
-	BucketId   string  `json:"bucketId,omitempty"`
+	//+kubebuilder:default=false
+	Reconciled bool `json:"reconciled,omitempty"`
+	//+kubebuilder:default=false
+	ToRecreate bool   `json:"ToRecreate,omitempty"`
+	KeyId      string `json:"keyId,omitempty"`
+	BucketId   string `json:"bucketId,omitempty"`
 }
 
 //+kubebuilder:object:root=true
