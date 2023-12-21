@@ -35,20 +35,26 @@ spec:
           spec:
             description: KeySpec defines the desired state of Key
             properties:
-              bucketId:
-                type: string
-              bucketName:
-                type: string
-              capabilities:
+              atProvider:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
                   Important: Run "make" to regenerate code after modifying this file'
-                items:
-                  type: string
-                type: array
-              namePrefix:
-                type: string
-              validDurationInSeconds:
-                type: integer
+                properties:
+                  bucketId:
+                    type: string
+                  bucketName:
+                    type: string
+                  capabilities:
+                    description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of
+                      cluster Important: Run "make" to regenerate code after modifying
+                      this file'
+                    items:
+                      type: string
+                    type: array
+                  namePrefix:
+                    type: string
+                  validDurationInSeconds:
+                    type: integer
+                type: object
               writeConnectionSecretToRef:
                 properties:
                   name:
@@ -83,13 +89,6 @@ spec:
                     type: string
                   validDurationInSeconds:
                     type: integer
-                  writeConnectionSecretToRef:
-                    properties:
-                      name:
-                        type: string
-                      namespace:
-                        type: string
-                    type: object
                 type: object
               bucketId:
                 type: string

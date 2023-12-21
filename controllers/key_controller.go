@@ -97,7 +97,7 @@ func (r *KeyReconciler) createKeySecret(key *b2v1alpha1.Key, appkey *backblaze.A
 			Namespace: key.Spec.WriteConnectionSecretToRef.Namespace,
 		},
 		Data: map[string][]byte{
-			"bucketName": []byte(key.Spec.BucketName),
+			"bucketName": []byte(key.Spec.AtProvider.BucketName),
 			"endpoint":   []byte(fmt.Sprintf("s3.%s.backblazeb2.com", string(os.Getenv("B2_REGION")))),
 			"keyName":    []byte(appkey.KeyName),
 			// AWS S3 compatibile variables
@@ -134,20 +134,20 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 		log.Info("Key is not reconciled")
 		var b2_bucket_id string
 
-		if key.Spec.BucketName != "" {
-			bucket_b2, bucket_b2_err := b2.Bucket(key.Spec.BucketName)
+		if key.Spec.AtProvider.BucketName != "" {
+			bucket_b2, bucket_b2_err := b2.Bucket(key.Spec.AtProvider.BucketName)
 			if bucket_b2_err != nil {
 				log.Error(bucket_b2_err, "Failed to find bucket at provider")
 			}
 			b2_bucket_id = bucket_b2.ID
 		} else {
-			b2_bucket_id = key.Spec.BucketId
+			b2_bucket_id = key.Spec.AtProvider.BucketId
 		}
 
 		// Create application key
 		applicationKeyCreate, err := b2.CreateApplicationKey(&backblaze.CreateKeyRequest{
 			KeyName:      key.Name,
-			Capabilities: key.Spec.Capabilities,
+			Capabilities: key.Spec.AtProvider.Capabilities,
 			BucketId:     b2_bucket_id,
 		})
 		if err != nil {
@@ -165,13 +165,13 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 		// Saving reconcilation and provider config
 		key.Status.Reconciled = true
 		key.Status.ToRecreate = false
-		key.Status.AtProvider = key.Spec
+		key.Status.AtProvider = key.Spec.AtProvider
 		key.Status.KeyId = applicationKeyCreate.ApplicationKeyId
 		r.Status().Update(ctx, key)
 	} else {
 		// reconciling loop
 		log.Info("Key is reconciled")
-		if !reflect.DeepEqual(key.Spec, key.Status.AtProvider) && !key.Status.ToRecreate {
+		if !reflect.DeepEqual(key.Spec.AtProvider, key.Status.AtProvider) && !key.Status.ToRecreate {
 			log.Info("Key resource exist on cluster, updating state")
 			// Updating resource at cluster
 			key.Status.Reconciled = false
