@@ -24,45 +24,58 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type WriteConnectionSecretToRef struct {
-	Name      string `json:"name,omitempty"`
+	// Set name of secret where credentials should be set
+	Name string `json:"name,omitempty"`
+	// Set namespace of secret where credentials should be set
 	Namespace string `json:"namespace,omitempty"`
 }
 
 // KeySpec defines the desired state of Key
 type SpecAtProvider struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	Capabilities           []string `json:"capabilities,omitempty"`
-	ValidDurationInSeconds int      `json:"validDurationInSeconds,omitempty"`
-	BucketName             string   `json:"bucketName,omitempty"`
-	BucketId               string   `json:"bucketId,omitempty"`
-	NamePrefix             string   `json:"namePrefix,omitempty"`
+	// List of capabilities that key should have. Available options: "listKeys", "writeKeys", "deleteKeys", "listAllBucketNames", "listBuckets", "readBuckets", "writeBuckets", "deleteBuckets", "readBucketRetentions", "writeBucketRetentions", "readBucketEncryption", "writeBucketEncryption", "listFiles", "readFiles", "shareFiles", "writeFiles", "deleteFiles", "readFileLegalHolds", "writeFileLegalHolds", "readFileRetentions", "writeFileRetentions", "bypassGovernance"
+	Capabilities []string `json:"capabilities,omitempty"`
+	// When provided, the key will expire after the given number of seconds, and will have expirationTimestamp set. Value must be a positive integer, and must be less than 1000 days (in seconds).
+	// +kubebuilder:validation:Type=integer
+	// +kubebuilder:validation:Maximum:=86400000
+	ValidDurationInSeconds int `json:"validDurationInSeconds,omitempty"`
+	// Name of bucket to which key should have access. Leave empty to allow access to all buckets on account.
+	BucketName string `json:"bucketName,omitempty"`
+	// Optional: Instead of bucket name, you can define directly a bucket ID. Leave empty to allow access to all buckets on account.
+	BucketId string `json:"bucketId,omitempty"`
+	// When present, restricts access to files whose names start with the prefix. Note: you need to setup bucketName or bucketId when setting this.
+	NamePrefix string `json:"namePrefix,omitempty"`
 }
 
 // KeySpec defines the desired state of Key
 type KeySpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Define configuration at provider (https://www.backblaze.com/apidocs/b2-create-key)
 	AtProvider SpecAtProvider `json:"atProvider,omitempty"`
 	//+kubebuilder:validation:Optional
+	// Set where operator should save connection credentials.
 	WriteConnectionSecretToRef WriteConnectionSecretToRef `json:"writeConnectionSecretToRef,omitempty"`
 }
 
 // KeyStatus defines the observed state of Key
 type KeyStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Current configuration at provider
 	AtProvider SpecAtProvider `json:"atProvider,omitempty"`
 	//+kubebuilder:default=false
+	// Status for resource, if it was reconciled by operator
 	Reconciled bool `json:"reconciled,omitempty"`
 	//+kubebuilder:default=false
-	ToRecreate bool   `json:"ToRecreate,omitempty"`
-	KeyId      string `json:"keyId,omitempty"`
-	BucketId   string `json:"bucketId,omitempty"`
+	// Internal status for operator: it will be set to true if the key will need to be recreated
+	ToRecreate bool `json:"ToRecreate,omitempty"`
+	// Internal status for operator: application key ID to perform some operations
+	KeyId string `json:"keyId,omitempty"`
+	// Internal status for operator: target bucket ID
+	BucketId string `json:"bucketId,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Bucket",type="string",JSONPath=`.spec.atProvider.bucketName`
+//+kubebuilder:printcolumn:name="Reconciled",type="boolean",JSONPath=`.status.reconciled`
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Key is the Schema for the keys API
 type Key struct {

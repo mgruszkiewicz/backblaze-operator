@@ -15,7 +15,17 @@ spec:
     singular: key
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.atProvider.bucketName
+      name: Bucket
+      type: string
+    - jsonPath: .status.reconciled
+      name: Reconciled
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: Key is the Schema for the keys API
@@ -36,30 +46,50 @@ spec:
             description: KeySpec defines the desired state of Key
             properties:
               atProvider:
-                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "make" to regenerate code after modifying this file'
+                description: Define configuration at provider (https://www.backblaze.com/apidocs/b2-create-key)
                 properties:
                   bucketId:
+                    description: 'Optional: Instead of bucket name, you can define
+                      directly a bucket ID. Leave empty to allow access to all buckets
+                      on account.'
                     type: string
                   bucketName:
+                    description: Name of bucket to which key should have access. Leave
+                      empty to allow access to all buckets on account.
                     type: string
                   capabilities:
-                    description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of
-                      cluster Important: Run "make" to regenerate code after modifying
-                      this file'
+                    description: 'List of capabilities that key should have. Available
+                      options: "listKeys", "writeKeys", "deleteKeys", "listAllBucketNames",
+                      "listBuckets", "readBuckets", "writeBuckets", "deleteBuckets",
+                      "readBucketRetentions", "writeBucketRetentions", "readBucketEncryption",
+                      "writeBucketEncryption", "listFiles", "readFiles", "shareFiles",
+                      "writeFiles", "deleteFiles", "readFileLegalHolds", "writeFileLegalHolds",
+                      "readFileRetentions", "writeFileRetentions", "bypassGovernance"'
                     items:
                       type: string
                     type: array
                   namePrefix:
+                    description: 'When present, restricts access to files whose names
+                      start with the prefix. Note: you need to setup bucketName or
+                      bucketId when setting this.'
                     type: string
                   validDurationInSeconds:
+                    description: When provided, the key will expire after the given
+                      number of seconds, and will have expirationTimestamp set. Value
+                      must be a positive integer, and must be less than 1000 days
+                      (in seconds).
+                    maximum: 86400000
                     type: integer
                 type: object
               writeConnectionSecretToRef:
+                description: Set where operator should save connection credentials.
                 properties:
                   name:
+                    description: Set name of secret where credentials should be set
                     type: string
                   namespace:
+                    description: Set namespace of secret where credentials should
+                      be set
                     type: string
                 type: object
             type: object
@@ -68,34 +98,55 @@ spec:
             properties:
               ToRecreate:
                 default: false
+                description: 'Internal status for operator: it will be set to true
+                  if the key will need to be recreated'
                 type: boolean
               atProvider:
-                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                  of cluster Important: Run "make" to regenerate code after modifying
-                  this file'
+                description: Current configuration at provider
                 properties:
                   bucketId:
+                    description: 'Optional: Instead of bucket name, you can define
+                      directly a bucket ID. Leave empty to allow access to all buckets
+                      on account.'
                     type: string
                   bucketName:
+                    description: Name of bucket to which key should have access. Leave
+                      empty to allow access to all buckets on account.
                     type: string
                   capabilities:
-                    description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of
-                      cluster Important: Run "make" to regenerate code after modifying
-                      this file'
+                    description: 'List of capabilities that key should have. Available
+                      options: "listKeys", "writeKeys", "deleteKeys", "listAllBucketNames",
+                      "listBuckets", "readBuckets", "writeBuckets", "deleteBuckets",
+                      "readBucketRetentions", "writeBucketRetentions", "readBucketEncryption",
+                      "writeBucketEncryption", "listFiles", "readFiles", "shareFiles",
+                      "writeFiles", "deleteFiles", "readFileLegalHolds", "writeFileLegalHolds",
+                      "readFileRetentions", "writeFileRetentions", "bypassGovernance"'
                     items:
                       type: string
                     type: array
                   namePrefix:
+                    description: 'When present, restricts access to files whose names
+                      start with the prefix. Note: you need to setup bucketName or
+                      bucketId when setting this.'
                     type: string
                   validDurationInSeconds:
+                    description: When provided, the key will expire after the given
+                      number of seconds, and will have expirationTimestamp set. Value
+                      must be a positive integer, and must be less than 1000 days
+                      (in seconds).
+                    maximum: 86400000
                     type: integer
                 type: object
               bucketId:
+                description: 'Internal status for operator: target bucket ID'
                 type: string
               keyId:
+                description: 'Internal status for operator: application key ID to
+                  perform some operations'
                 type: string
               reconciled:
                 default: false
+                description: Status for resource, if it was reconciled by operator
                 type: boolean
             type: object
         type: object
