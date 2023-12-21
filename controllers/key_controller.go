@@ -133,23 +133,36 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 	if !key.Status.Reconciled || key.Status.ToRecreate {
 		log.Info("Key is not reconciled")
 		var b2_bucket_id string
+		var createKeyRequest *backblaze.CreateKeyRequest
 
-		if key.Spec.AtProvider.BucketName != "" {
-			bucket_b2, bucket_b2_err := b2.Bucket(key.Spec.AtProvider.BucketName)
-			if bucket_b2_err != nil {
-				log.Error(bucket_b2_err, "Failed to find bucket at provider")
+		if key.Spec.AtProvider.BucketName != "" || key.Spec.AtProvider.BucketId != "" {
+			// If bucketName or bucketId is defined, creating key will defined bucketId
+			if key.Spec.AtProvider.BucketName != "" {
+				bucket_b2, bucket_b2_err := b2.Bucket(key.Spec.AtProvider.BucketName)
+				if bucket_b2_err != nil {
+					log.Error(bucket_b2_err, "Failed to find bucket at provider")
+				}
+				b2_bucket_id = bucket_b2.ID
+			} else {
+				b2_bucket_id = key.Spec.AtProvider.BucketId
 			}
-			b2_bucket_id = bucket_b2.ID
+
+			createKeyRequest = &backblaze.CreateKeyRequest{
+				KeyName:      key.Name,
+				Capabilities: key.Spec.AtProvider.Capabilities,
+				BucketId:     b2_bucket_id,
+			}
 		} else {
-			b2_bucket_id = key.Spec.AtProvider.BucketId
+			// If bucketName or bucketId is not defined, creating key that have access to all buckets
+			createKeyRequest = &backblaze.CreateKeyRequest{
+				KeyName:      key.Name,
+				Capabilities: key.Spec.AtProvider.Capabilities,
+			}
 		}
 
 		// Create application key
-		applicationKeyCreate, err := b2.CreateApplicationKey(&backblaze.CreateKeyRequest{
-			KeyName:      key.Name,
-			Capabilities: key.Spec.AtProvider.Capabilities,
-			BucketId:     b2_bucket_id,
-		})
+		applicationKeyCreate, err := b2.CreateApplicationKey(createKeyRequest)
+
 		if err != nil {
 			log.Error(err, "Unable to create application key at provider")
 		}
