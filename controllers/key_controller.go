@@ -73,7 +73,7 @@ func (r *KeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if !key.DeletionTimestamp.IsZero() {
 		log.Info("Key is being deleted")
-		return r.reconcileDelete(ctx, key)
+		return r.reconcileDelete(ctx, key, true)
 	}
 	r.reconcileCreate(ctx, key)
 
@@ -89,6 +89,7 @@ func (r *KeyReconciler) reconcileCreate(ctx context.Context, key *b2v1alpha1.Key
 	return ctrl.Result{}, nil
 }
 
+// TODO: add option/create seperate function to update existing secret
 func (r *KeyReconciler) createKeySecret(key *b2v1alpha1.Key, appkey *backblaze.ApplicationKeyResponse) *corev1.Secret {
 
 	return &corev1.Secret{
@@ -192,7 +193,7 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 			r.Status().Update(ctx, key)
 
 			// Deleting key
-			_, err := r.reconcileDelete(ctx, key)
+			_, err := r.reconcileDelete(ctx, key, false)
 			if err != nil {
 				log.Error(err, "Failed to delete secret")
 			}
@@ -208,25 +209,27 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 	return nil
 }
 
-func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key) (ctrl.Result, error) {
+func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key, deleteSecret bool) (ctrl.Result, error) {
 
 	log := r.Log.WithValues("key", key.Namespace)
 	log.Info("Removing Key")
 
-	// Retriving existing secret
-	existing_secret := &corev1.Secret{}
-	if err := r.Client.Get(ctx, types.NamespacedName{
-		Name:      key.Spec.WriteConnectionSecretToRef.Name,
-		Namespace: key.Spec.WriteConnectionSecretToRef.Namespace},
-		existing_secret,
-	); err != nil {
-		log.Info("Failed to get existing secret at cluster")
-	} else {
-		// Remove secret
-		if err := r.Delete(ctx, existing_secret); err != nil {
-			log.Error(err, "Failed to remove secret")
+	if deleteSecret {
+		// Retriving existing secret
+		existing_secret := &corev1.Secret{}
+		if err := r.Client.Get(ctx, types.NamespacedName{
+			Name:      key.Spec.WriteConnectionSecretToRef.Name,
+			Namespace: key.Spec.WriteConnectionSecretToRef.Namespace},
+			existing_secret,
+		); err != nil {
+			log.Info("Failed to get existing secret at cluster")
 		} else {
-			log.Info("Deleted secret at cluster")
+			// Remove secret
+			if err := r.Delete(ctx, existing_secret); err != nil {
+				log.Error(err, "Failed to remove secret")
+			} else {
+				log.Info("Deleted secret at cluster")
+			}
 		}
 	}
 
