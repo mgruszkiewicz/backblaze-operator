@@ -62,6 +62,8 @@ kustomize build config/default | kubectl delete -f -
 
 ### Example CRD Usage
 
+Creating bucket
+
 ```yaml
 apiVersion: b2.issei.space/v1alpha1
 kind: Bucket
@@ -79,6 +81,25 @@ spec:
   writeConnectionSecretToRef:
     name: my-bucket-credentials
     namespace: default
+```
+
+Creating additional key that will have access to bucket `my-b2-bucket` and will save credentials to `new-key` secret in namespace `default`
+```yaml
+apiVersion: b2.issei.space/v1alpha1
+kind: Key
+metadata:
+  name: my-b2-key-aditional
+spec:
+  atProvider:
+    bucketName: my-b2-bucket
+    capabilities:
+      - listAllBucketNames
+      - listBuckets
+      - readBuckets
+      - listFiles
+  writeConnectionSecretToRef:
+      name: new-key
+      namespace: default
 ```
 
 ## Contributing

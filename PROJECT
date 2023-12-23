@@ -20,4 +20,13 @@ resources:
   kind: Bucket
   path: github.com/ihyoudou/backblaze-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: issei.space
+  group: b2
+  kind: Key
+  path: github.com/ihyoudou/backblaze-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"
