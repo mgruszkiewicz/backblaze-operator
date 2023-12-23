@@ -89,23 +89,41 @@ func (r *KeyReconciler) reconcileCreate(ctx context.Context, key *b2v1alpha1.Key
 	return ctrl.Result{}, nil
 }
 
-// TODO: add option/create seperate function to update existing secret
 func (r *KeyReconciler) createKeySecret(key *b2v1alpha1.Key, appkey *backblaze.ApplicationKeyResponse) *corev1.Secret {
+	log := r.Log.WithValues("key", key.Namespace)
 
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      key.Spec.WriteConnectionSecretToRef.Name,
-			Namespace: key.Spec.WriteConnectionSecretToRef.Namespace,
-		},
-		Data: map[string][]byte{
-			"bucketName": []byte(key.Spec.AtProvider.BucketName),
-			"endpoint":   []byte(fmt.Sprintf("s3.%s.backblazeb2.com", string(os.Getenv("B2_REGION")))),
-			"keyName":    []byte(appkey.KeyName),
-			// AWS S3 compatibile variables
-			"AWS_ACCESS_KEY_ID":     []byte(appkey.ApplicationKeyId),
-			"AWS_SECRET_ACCESS_KEY": []byte(appkey.ApplicationKey),
-		},
+	// Secret data
+	secretData := map[string][]byte{
+		"bucketName": []byte(key.Spec.AtProvider.BucketName),
+		"endpoint":   []byte(fmt.Sprintf("s3.%s.backblazeb2.com", string(os.Getenv("B2_REGION")))),
+		"keyName":    []byte(appkey.KeyName),
+		// AWS S3 compatibile variables
+		"AWS_ACCESS_KEY_ID":     []byte(appkey.ApplicationKeyId),
+		"AWS_SECRET_ACCESS_KEY": []byte(appkey.ApplicationKey),
 	}
+
+	// Check if secret exist
+	secret := &corev1.Secret{}
+	err := r.Get(context.TODO(), types.NamespacedName{Name: key.Spec.WriteConnectionSecretToRef.Name, Namespace: key.Spec.WriteConnectionSecretToRef.Namespace}, secret)
+	if err != nil {
+		log.Info("Not found existing secret... creating new")
+		secret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      key.Spec.WriteConnectionSecretToRef.Name,
+				Namespace: key.Spec.WriteConnectionSecretToRef.Namespace,
+			},
+			Data: secretData,
+		}
+	} else {
+		log.Info("Found existing secret with credentials, updating values")
+		secret.Data = secretData
+		err = r.Update(context.TODO(), secret)
+		if err != nil {
+			log.Error(err, "Unable to update existing secret with credentials")
+		}
+
+	}
+	return secret
 }
 
 func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.Key) error {
