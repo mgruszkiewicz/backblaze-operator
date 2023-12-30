@@ -23,7 +23,7 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
-	b2v1alpha1 "github.com/ihyoudou/backblaze-operator/api/v1alpha1"
+	b2v1alpha2 "github.com/ihyoudou/backblaze-operator/api/v1alpha2"
 	"github.com/ihyoudou/go-backblaze"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -53,7 +53,7 @@ type KeyReconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *KeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("key", req.NamespacedName)
-	key := &b2v1alpha1.Key{}
+	key := &b2v1alpha2.Key{}
 
 	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, key); err != nil {
 		if errors.IsNotFound(err) {
@@ -80,7 +80,7 @@ func (r *KeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	return ctrl.Result{}, nil
 }
 
-func (r *KeyReconciler) reconcileCreate(ctx context.Context, key *b2v1alpha1.Key) (ctrl.Result, error) {
+func (r *KeyReconciler) reconcileCreate(ctx context.Context, key *b2v1alpha2.Key) (ctrl.Result, error) {
 	// Create or update the key
 	if err := r.createOrUpdateKey(ctx, key); err != nil {
 		return ctrl.Result{}, err
@@ -89,7 +89,7 @@ func (r *KeyReconciler) reconcileCreate(ctx context.Context, key *b2v1alpha1.Key
 	return ctrl.Result{}, nil
 }
 
-func (r *KeyReconciler) createKeySecret(key *b2v1alpha1.Key, appkey *backblaze.ApplicationKeyResponse) *corev1.Secret {
+func (r *KeyReconciler) createKeySecret(key *b2v1alpha2.Key, appkey *backblaze.ApplicationKeyResponse) *corev1.Secret {
 	log := r.Log.WithValues("key", key.Namespace)
 
 	// Secret data
@@ -126,7 +126,7 @@ func (r *KeyReconciler) createKeySecret(key *b2v1alpha1.Key, appkey *backblaze.A
 	return secret
 }
 
-func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.Key) error {
+func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.Key) error {
 	log := r.Log.WithValues("key", key.Namespace)
 	log.Info("create or update key")
 
@@ -227,7 +227,7 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha1.K
 	return nil
 }
 
-func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key, deleteSecret bool) (ctrl.Result, error) {
+func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha2.Key, deleteSecret bool) (ctrl.Result, error) {
 
 	log := r.Log.WithValues("key", key.Namespace)
 	log.Info("Removing Key")
@@ -282,6 +282,6 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha1.Key
 // SetupWithManager sets up the controller with the Manager.
 func (r *KeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&b2v1alpha1.Key{}).
+		For(&b2v1alpha2.Key{}).
 		Complete(r)
 }

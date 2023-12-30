@@ -1,0 +1,22 @@
+apiVersion: b2.issei.space/v1alpha2
+kind: Bucket
+metadata:
+  labels:
+    app.kubernetes.io/name: bucket
+    app.kubernetes.io/instance: bucket-sample
+    app.kubernetes.io/part-of: b2operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: b2operator
+  name: bucket-sample
+spec:
+  acl: public
+  bucketlifecycle:
+    - fileNamePrefix: "/"
+      daysFromUploadingToHiding: 2
+      daysFromHidingToDeleting: 3
+    - fileNamePrefix: "logs"
+      daysFromUploadingToHiding: 5
+      daysFromHidingToDeleting: 7
+  writeConnectionSecretToRef:
+    name: my-bucket-credentials
+    namespace: default

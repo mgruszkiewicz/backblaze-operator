@@ -22,7 +22,7 @@ import (
 	"os"
 
 	"github.com/go-logr/logr"
-	b2v1alpha1 "github.com/ihyoudou/backblaze-operator/api/v1alpha1"
+	b2v1alpha2 "github.com/ihyoudou/backblaze-operator/api/v1alpha2"
 	"github.com/ihyoudou/go-backblaze"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -61,7 +61,9 @@ type BucketReconciler struct {
 func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
 	log := r.Log.WithValues("bucket", req.NamespacedName)
-	bucket := &b2v1alpha1.Bucket{}
+
+	// Reconciling current api version
+	bucket := &b2v1alpha2.Bucket{}
 
 	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, bucket); err != nil {
 		if errors.IsNotFound(err) {
@@ -88,7 +90,7 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alpha1.Bucket) (ctrl.Result, error) {
+func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alpha2.Bucket) (ctrl.Result, error) {
 	// Create or update the bucket
 	if err := r.createOrUpdateBucket(ctx, bucket); err != nil {
 		return ctrl.Result{}, err
@@ -97,7 +99,7 @@ func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alph
 	return ctrl.Result{}, nil
 }
 
-func (r *BucketReconciler) createBucketSecret(bucket *b2v1alpha1.Bucket, appkey *backblaze.ApplicationKeyResponse) *corev1.Secret {
+func (r *BucketReconciler) createBucketSecret(bucket *b2v1alpha2.Bucket, appkey *backblaze.ApplicationKeyResponse) *corev1.Secret {
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -115,7 +117,7 @@ func (r *BucketReconciler) createBucketSecret(bucket *b2v1alpha1.Bucket, appkey 
 	}
 }
 
-func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v1alpha1.Bucket) error {
+func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v1alpha2.Bucket) error {
 	log := r.Log.WithValues("bucket", bucket.Namespace)
 	// Check if the bucket exists
 	if err := r.Get(ctx, types.NamespacedName{Name: bucket.Name, Namespace: bucket.Namespace}, bucket); err != nil {
@@ -225,7 +227,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 	return nil
 }
 
-func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alpha1.Bucket) (ctrl.Result, error) {
+func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alpha2.Bucket) (ctrl.Result, error) {
 	log := r.Log.WithValues("bucket", bucket.Namespace)
 	log.Info("Removing Bucket")
 	// Checking if backblaze secrets are set
@@ -288,7 +290,7 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 // SetupWithManager sets up the controller with the Manager.
 func (r *BucketReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&b2v1alpha1.Bucket{}).
+		For(&b2v1alpha2.Bucket{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
 		Complete(r)
 }

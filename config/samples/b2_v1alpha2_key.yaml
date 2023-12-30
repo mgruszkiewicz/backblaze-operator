@@ -1,4 +1,4 @@
-apiVersion: b2.issei.space/v1alpha1
+apiVersion: b2.issei.space/v1alpha2
 kind: Key
 metadata:
   labels:
@@ -9,4 +9,13 @@ metadata:
     app.kubernetes.io/created-by: b2operator
   name: key-sample
 spec:
-  # TODO(user): Add fields here
+  atProvider:
+    bucketName: my-b2-bucket
+    capabilities:
+      - listAllBucketNames
+      - listBuckets
+      - readBuckets
+      - listFiles
+  writeConnectionSecretToRef:
+      name: new-key
+      namespace: default

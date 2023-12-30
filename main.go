@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	b2v1alpha1 "github.com/ihyoudou/backblaze-operator/api/v1alpha1"
+	b2v1alpha2 "github.com/ihyoudou/backblaze-operator/api/v1alpha2"
 	"github.com/ihyoudou/backblaze-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
@@ -45,6 +46,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(b2v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(b2v1alpha2.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
