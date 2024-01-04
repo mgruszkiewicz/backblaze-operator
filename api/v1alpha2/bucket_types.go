@@ -35,27 +35,30 @@ type BucketWriteConnectionSecretToRef struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
-// BucketSpec defines the desired state of Bucket
-type BucketSpec struct {
+type BucketSpecAtProvider struct {
 	// Acl defines if content of this bucket should be public or private
 	Acl string `json:"acl,omitempty"`
 	// Define lifecycle rules for objects in bucket
-	BucketLifecycle                  []backblaze.LifecycleRule        `json:"bucketLifecycle,omitempty"`
+	BucketLifecycle []backblaze.LifecycleRule `json:"bucketLifecycle,omitempty"`
+}
+
+// BucketSpec defines the desired state of Bucket
+type BucketSpec struct {
+	AtProvider                       BucketSpecAtProvider             `json:"atProvider"`
 	BucketWriteConnectionSecretToRef BucketWriteConnectionSecretToRef `json:"writeConnectionSecretToRef,omitempty"`
 }
 
 // BucketStatus defines the observed state of Bucket
 type BucketStatus struct {
-	AtProvider BucketSpec `json:"atProvider,omitempty"`
-	Reconciled bool       `json:"reconciled,omitempty"`
+	AtProvider BucketSpecAtProvider `json:"atProvider,omitempty"`
+	Reconciled bool                 `json:"reconciled,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
-// Bucket is the Schema for the buckets API
+// +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
+
+// Bucket is the Schema for the buckets API
 type Bucket struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

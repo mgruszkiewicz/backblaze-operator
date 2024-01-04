@@ -22,6 +22,7 @@ import (
 	"os"
 
 	"github.com/go-logr/logr"
+	b2v1alpha1 "github.com/ihyoudou/backblaze-operator/api/v1alpha1"
 	b2v1alpha2 "github.com/ihyoudou/backblaze-operator/api/v1alpha2"
 	"github.com/ihyoudou/go-backblaze"
 	corev1 "k8s.io/api/core/v1"
@@ -61,6 +62,18 @@ type BucketReconciler struct {
 func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
 	log := r.Log.WithValues("bucket", req.NamespacedName)
+
+	bucket_old := &b2v1alpha1.Bucket{}
+	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, bucket_old); err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Bucket v1alpha1 resource not found.")
+			return ctrl.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		log.Info("Failed to get Bucket v1alpha1")
+	} else {
+		log.Info("Got an old Bucket v1alpha1, object this will not be used!")
+	}
 
 	// Reconciling current api version
 	bucket := &b2v1alpha2.Bucket{}
@@ -143,7 +156,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 
 		// Define bucket ACL
 		bucket_acl := backblaze.AllPrivate
-		switch bucket.Spec.Acl {
+		switch bucket.Spec.AtProvider.Acl {
 		case "private":
 			bucket_acl = backblaze.AllPrivate
 		case "public":
@@ -159,7 +172,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		if bucket_b2_exist == nil {
 			log.Info("Creating Bucket")
 			// Creating Bucket
-			bucket_b2, bucket_err := b2.CreateBucketWithInfo(bucket.Name, bucket_acl, make(map[string]string), bucket.Spec.BucketLifecycle)
+			bucket_b2, bucket_err := b2.CreateBucketWithInfo(bucket.Name, bucket_acl, make(map[string]string), bucket.Spec.AtProvider.BucketLifecycle)
 
 			if bucket_err != nil {
 				return fmt.Errorf("Unable to create Bucket: %v", bucket_err)
@@ -170,8 +183,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 			b2_bucket_id = bucket_b2_exist.ID
 			log.Info("Bucket exist at provider, adopting")
 		}
-		bucket.Status.AtProvider.BucketLifecycle = bucket.Spec.BucketLifecycle
-		bucket.Status.AtProvider.Acl = bucket.Spec.Acl
+		bucket.Status.AtProvider = bucket.Spec.AtProvider
 		bucket.Status.Reconciled = true
 		r.Status().Update(ctx, bucket)
 
@@ -204,20 +216,20 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 			return fmt.Errorf("Unable to fetch Bucket: %v", err)
 		}
 
-		if bucket.Spec.Acl != bucket.Status.AtProvider.Acl || !StringSlicesEqual(bucket.Spec.BucketLifecycle, bucket.Status.AtProvider.BucketLifecycle) {
+		if bucket.Spec.AtProvider.Acl != bucket.Status.AtProvider.Acl || !StringSlicesEqual(bucket.Spec.AtProvider.BucketLifecycle, bucket.Status.AtProvider.BucketLifecycle) {
 			bucket_acl := backblaze.AllPrivate
-			switch bucket.Spec.Acl {
+			switch bucket.Spec.AtProvider.Acl {
 			case "private":
 				bucket_acl = backblaze.AllPrivate
 			case "public":
 				bucket_acl = backblaze.AllPublic
 			}
 
-			update_err := bucket_at_b2.UpdateAll(bucket_acl, make(map[string]string), bucket.Spec.BucketLifecycle, 0)
+			update_err := bucket_at_b2.UpdateAll(bucket_acl, make(map[string]string), bucket.Spec.AtProvider.BucketLifecycle, 0)
 			if update_err != nil {
 				return fmt.Errorf("Unable to update Bucket: %v", update_err)
 			} else {
-				bucket.Status.AtProvider = bucket.Spec
+				bucket.Status.AtProvider = bucket.Spec.AtProvider
 			}
 			r.Status().Update(ctx, bucket)
 		}

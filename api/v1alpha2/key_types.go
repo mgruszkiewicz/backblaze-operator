@@ -31,7 +31,7 @@ type WriteConnectionSecretToRef struct {
 }
 
 // KeySpec defines the desired state of Key
-type SpecAtProvider struct {
+type KeySpecAtProvider struct {
 	// List of capabilities that key should have. Available options: "listKeys", "writeKeys", "deleteKeys", "listAllBucketNames", "listBuckets", "readBuckets", "writeBuckets", "deleteBuckets", "readBucketRetentions", "writeBucketRetentions", "readBucketEncryption", "writeBucketEncryption", "listFiles", "readFiles", "shareFiles", "writeFiles", "deleteFiles", "readFileLegalHolds", "writeFileLegalHolds", "readFileRetentions", "writeFileRetentions", "bypassGovernance"
 	Capabilities []string `json:"capabilities,omitempty"`
 	// When provided, the key will expire after the given number of seconds, and will have expirationTimestamp set. Value must be a positive integer, and must be less than 1000 days (in seconds).
@@ -49,7 +49,7 @@ type SpecAtProvider struct {
 // KeySpec defines the desired state of Key
 type KeySpec struct {
 	// Define configuration at provider (https://www.backblaze.com/apidocs/b2-create-key)
-	AtProvider SpecAtProvider `json:"atProvider,omitempty"`
+	AtProvider KeySpecAtProvider `json:"atProvider,omitempty"`
 	//+kubebuilder:validation:Optional
 	// Set where operator should save connection credentials.
 	WriteConnectionSecretToRef WriteConnectionSecretToRef `json:"writeConnectionSecretToRef,omitempty"`
@@ -58,7 +58,7 @@ type KeySpec struct {
 // KeyStatus defines the observed state of Key
 type KeyStatus struct {
 	// Current configuration at provider
-	AtProvider SpecAtProvider `json:"atProvider,omitempty"`
+	AtProvider KeySpecAtProvider `json:"atProvider,omitempty"`
 	//+kubebuilder:default=false
 	// Status for resource, if it was reconciled by operator
 	Reconciled bool `json:"reconciled,omitempty"`
