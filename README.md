@@ -70,7 +70,7 @@ kind: Bucket
 metadata:
   name: my-b2-bucket
 spec:
-  acl: public
+  acl: private
   atProvider:
     bucketLifecycle:
       - fileNamePrefix: "/"
@@ -79,17 +79,14 @@ spec:
       - fileNamePrefix: "logs"
         daysFromUploadingToHiding: 5
         daysFromHidingToDeleting: 7
-  writeConnectionSecretToRef:
-    name: my-bucket-credentials
-    namespace: default
 ```
 
-Creating additional key that will have access to bucket `my-b2-bucket` and will save credentials to `new-key` secret in namespace `default`
+Creating keys that will have access to bucket `my-b2-bucket` and will be saved to `new-key` secret in namespace `default`
 ```yaml
 apiVersion: b2.issei.space/v1alpha2
 kind: Key
 metadata:
-  name: my-b2-key-aditional
+  name: my-b2-key
 spec:
   atProvider:
     bucketName: my-b2-bucket

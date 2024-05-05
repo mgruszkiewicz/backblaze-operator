@@ -278,7 +278,7 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha2.Key
 	// Remove the finalizer and update the object
 	controllerutil.RemoveFinalizer(key, keyFinalizer)
 	if err := r.Update(ctx, key); err != nil {
-		return ctrl.Result{}, fmt.Errorf("Error removing finalizer: %v", err)
+		return ctrl.Result{}, fmt.Errorf("error removing finalizer: %v", err)
 	}
 
 	return ctrl.Result{}, nil

@@ -220,7 +220,7 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 		// Deleting bucket
 		err := bucket_b2.Delete()
 		if err != nil {
-			log.Info("Error occured while trying to remove bucket (is the bucket empty?)")
+			log.Error(err, "error occured while trying to remove bucket (is the bucket empty?)")
 		} else {
 			// Remove the finalizer and update the object
 			controllerutil.RemoveFinalizer(bucket, bucketFinalizer)
