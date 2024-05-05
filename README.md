@@ -62,7 +62,7 @@ kustomize build config/default | kubectl delete -f -
 
 ### Example CRD Usage
 
-Creating bucket
+Creating bucket with lifecycle policies on prefix `/` and `/logs`. Lifecycle policies are optional.
 
 ```yaml
 apiVersion: b2.issei.space/v1alpha2
@@ -70,8 +70,8 @@ kind: Bucket
 metadata:
   name: my-b2-bucket
 spec:
-  acl: private
   atProvider:
+    acl: private
     bucketLifecycle:
       - fileNamePrefix: "/"
         daysFromUploadingToHiding: 2

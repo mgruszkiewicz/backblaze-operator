@@ -9,14 +9,12 @@ metadata:
     app.kubernetes.io/created-by: b2operator
   name: bucket-sample
 spec:
-  acl: public
-  bucketlifecycle:
-    - fileNamePrefix: "/"
-      daysFromUploadingToHiding: 2
-      daysFromHidingToDeleting: 3
-    - fileNamePrefix: "logs"
-      daysFromUploadingToHiding: 5
-      daysFromHidingToDeleting: 7
-  writeConnectionSecretToRef:
-    name: my-bucket-credentials
-    namespace: default
+  atProvider:
+    acl: public
+    bucketlifecycle:
+      - fileNamePrefix: "/"
+        daysFromUploadingToHiding: 2
+        daysFromHidingToDeleting: 3
+      - fileNamePrefix: "logs"
+        daysFromUploadingToHiding: 5
+        daysFromHidingToDeleting: 7
