@@ -30,11 +30,6 @@ type BucketLifecycle struct {
 	FileNamePrefix            string `json:"fileNamePrefix,omitempty"`
 }
 
-type BucketWriteConnectionSecretToRef struct {
-	Name      string `json:"name,omitempty"`
-	Namespace string `json:"namespace,omitempty"`
-}
-
 type BucketSpecAtProvider struct {
 	// Acl defines if content of this bucket should be public or private
 	Acl string `json:"acl,omitempty"`
@@ -44,8 +39,7 @@ type BucketSpecAtProvider struct {
 
 // BucketSpec defines the desired state of Bucket
 type BucketSpec struct {
-	AtProvider                       BucketSpecAtProvider             `json:"atProvider"`
-	BucketWriteConnectionSecretToRef BucketWriteConnectionSecretToRef `json:"writeConnectionSecretToRef,omitempty"`
+	AtProvider BucketSpecAtProvider `json:"atProvider"`
 }
 
 // BucketStatus defines the observed state of Bucket

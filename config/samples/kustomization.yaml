@@ -1,6 +1,5 @@
 ## Append samples you want in your CSV to this file as resources ##
 resources:
-- b2_v1alpha1_bucket.yaml
 - b2_v1alpha2_key.yaml
 - b2_v1alpha2_bucket.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

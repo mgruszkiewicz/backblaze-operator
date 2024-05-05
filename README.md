@@ -65,19 +65,20 @@ kustomize build config/default | kubectl delete -f -
 Creating bucket
 
 ```yaml
-apiVersion: b2.issei.space/v1alpha1
+apiVersion: b2.issei.space/v1alpha2
 kind: Bucket
 metadata:
   name: my-b2-bucket
 spec:
   acl: public
-  bucketLifecycle:
-    - fileNamePrefix: "/"
-      daysFromUploadingToHiding: 2
-      daysFromHidingToDeleting: 3
-    - fileNamePrefix: "logs"
-      daysFromUploadingToHiding: 5
-      daysFromHidingToDeleting: 7
+  atProvider:
+    bucketLifecycle:
+      - fileNamePrefix: "/"
+        daysFromUploadingToHiding: 2
+        daysFromHidingToDeleting: 3
+      - fileNamePrefix: "logs"
+        daysFromUploadingToHiding: 5
+        daysFromHidingToDeleting: 7
   writeConnectionSecretToRef:
     name: my-bucket-credentials
     namespace: default
@@ -85,7 +86,7 @@ spec:
 
 Creating additional key that will have access to bucket `my-b2-bucket` and will save credentials to `new-key` secret in namespace `default`
 ```yaml
-apiVersion: b2.issei.space/v1alpha1
+apiVersion: b2.issei.space/v1alpha2
 kind: Key
 metadata:
   name: my-b2-key-aditional
@@ -136,6 +137,11 @@ make manifests
 **NOTE:** Run `make --help` for more information on all potential `make` targets
 
 More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+
+## Troubleshooting
+
+### Unable to create public buckets
+Before you will be able to create public bucket, you need to enter payment details in your Backblaze account (error: `Account has no payment history. Please make a payment before making a public bucket.`).
 
 ## License
 
