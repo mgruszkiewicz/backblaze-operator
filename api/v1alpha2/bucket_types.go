@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1alpha2
 
 import (
 	backblaze "github.com/ihyoudou/go-backblaze"
@@ -30,35 +30,29 @@ type BucketLifecycle struct {
 	FileNamePrefix            string `json:"fileNamePrefix,omitempty"`
 }
 
-type BucketWriteConnectionSecretToRef struct {
-	Name      string `json:"name,omitempty"`
-	Namespace string `json:"namespace,omitempty"`
+type BucketSpecAtProvider struct {
+	// Acl defines if content of this bucket should be public or private
+	Acl string `json:"acl,omitempty"`
+	// Define lifecycle rules for objects in bucket
+	BucketLifecycle []backblaze.LifecycleRule `json:"bucketLifecycle,omitempty"`
 }
 
 // BucketSpec defines the desired state of Bucket
 type BucketSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Acl defines if content of this bucket should be public or private
-	Acl                              string                           `json:"acl,omitempty"`
-	BucketLifecycle                  []backblaze.LifecycleRule        `json:"bucketLifecycle,omitempty"`
-	BucketWriteConnectionSecretToRef BucketWriteConnectionSecretToRef `json:"writeConnectionSecretToRef,omitempty"`
+	AtProvider BucketSpecAtProvider `json:"atProvider"`
 }
 
 // BucketStatus defines the observed state of Bucket
 type BucketStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	AtProvider BucketSpec `json:"atProvider,omitempty"`
-	Reconciled bool       `json:"reconciled,omitempty"`
+	AtProvider BucketSpecAtProvider `json:"atProvider,omitempty"`
+	Reconciled bool                 `json:"reconciled,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 
 // Bucket is the Schema for the buckets API
-// +kubebuilder:subresource:status
 type Bucket struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

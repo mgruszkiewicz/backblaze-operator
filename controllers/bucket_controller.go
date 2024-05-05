@@ -22,11 +22,9 @@ import (
 	"os"
 
 	"github.com/go-logr/logr"
-	b2v1alpha1 "github.com/ihyoudou/backblaze-operator/api/v1alpha1"
+	b2v1alpha2 "github.com/ihyoudou/backblaze-operator/api/v1alpha2"
 	"github.com/ihyoudou/go-backblaze"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -61,7 +59,9 @@ type BucketReconciler struct {
 func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
 	log := r.Log.WithValues("bucket", req.NamespacedName)
-	bucket := &b2v1alpha1.Bucket{}
+
+	// Reconciling current api version
+	bucket := &b2v1alpha2.Bucket{}
 
 	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, bucket); err != nil {
 		if errors.IsNotFound(err) {
@@ -88,7 +88,7 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alpha1.Bucket) (ctrl.Result, error) {
+func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alpha2.Bucket) (ctrl.Result, error) {
 	// Create or update the bucket
 	if err := r.createOrUpdateBucket(ctx, bucket); err != nil {
 		return ctrl.Result{}, err
@@ -97,30 +97,12 @@ func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alph
 	return ctrl.Result{}, nil
 }
 
-func (r *BucketReconciler) createBucketSecret(bucket *b2v1alpha1.Bucket, appkey *backblaze.ApplicationKeyResponse) *corev1.Secret {
-
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      bucket.Spec.BucketWriteConnectionSecretToRef.Name,
-			Namespace: bucket.Spec.BucketWriteConnectionSecretToRef.Namespace,
-		},
-		Data: map[string][]byte{
-			"bucketName": []byte(bucket.Name),
-			"endpoint":   []byte(fmt.Sprintf("s3.%s.backblazeb2.com", string(os.Getenv("B2_REGION")))),
-			"keyName":    []byte(appkey.KeyName),
-			// AWS S3 compatibile variables
-			"AWS_ACCESS_KEY_ID":     []byte(appkey.ApplicationKeyId),
-			"AWS_SECRET_ACCESS_KEY": []byte(appkey.ApplicationKey),
-		},
-	}
-}
-
-func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v1alpha1.Bucket) error {
+func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v1alpha2.Bucket) error {
 	log := r.Log.WithValues("bucket", bucket.Namespace)
 	// Check if the bucket exists
 	if err := r.Get(ctx, types.NamespacedName{Name: bucket.Name, Namespace: bucket.Namespace}, bucket); err != nil {
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("Unable to fetch Bucket: %v", err)
+			return fmt.Errorf("unable to fetch Bucket: %v", err)
 		}
 	}
 
@@ -134,14 +116,18 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
 	})
 
+	// Enable go-backblaze debuging mode (printing all api requests) if B2_DEBUG env is set to "true"
+	if os.Getenv("B2_DEBUG") == "true" {
+		b2.Debug = true
+	}
+
 	// If bucket was not already reconciled (most likely new CR)
 	if !bucket.Status.Reconciled {
-		var b2_bucket_id string
 		// Creating new bucket
 
 		// Define bucket ACL
 		bucket_acl := backblaze.AllPrivate
-		switch bucket.Spec.Acl {
+		switch bucket.Spec.AtProvider.Acl {
 		case "private":
 			bucket_acl = backblaze.AllPrivate
 		case "public":
@@ -151,46 +137,30 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		bucket_b2_exist, bucket_b2_exist_err := b2.Bucket(bucket.Name)
 
 		if bucket_b2_exist_err != nil {
-			return fmt.Errorf("Unable to fetch Bucket: %v", bucket_b2_exist_err)
+			return fmt.Errorf("unable to fetch Bucket: %v", bucket_b2_exist_err)
 		}
 
 		if bucket_b2_exist == nil {
 			log.Info("Creating Bucket")
+
 			// Creating Bucket
-			bucket_b2, bucket_err := b2.CreateBucketWithInfo(bucket.Name, bucket_acl, make(map[string]string), bucket.Spec.BucketLifecycle)
+			bucket_b2, bucket_err := b2.CreateBucketWithInfo(bucket.Name, bucket_acl, make(map[string]string), bucket.Spec.AtProvider.BucketLifecycle)
+
+			// TODO: add `no_payment_history` handling in lib
+			if bucket_b2 == nil {
+				log.Info("unable to create bucket, no_payment_history?")
+			}
 
 			if bucket_err != nil {
-				return fmt.Errorf("Unable to create Bucket: %v", bucket_err)
+				return fmt.Errorf("unable to create Bucket: %v", bucket_err)
 			}
-			b2_bucket_id = bucket_b2.ID
 
 		} else {
-			b2_bucket_id = bucket_b2_exist.ID
 			log.Info("Bucket exist at provider, adopting")
 		}
-		bucket.Status.AtProvider.BucketLifecycle = bucket.Spec.BucketLifecycle
-		bucket.Status.AtProvider.Acl = bucket.Spec.Acl
+		bucket.Status.AtProvider = bucket.Spec.AtProvider
 		bucket.Status.Reconciled = true
 		r.Status().Update(ctx, bucket)
-
-		// Creating secret with bucket details
-		applicationKeyCreate, err := b2.CreateApplicationKey(&backblaze.CreateKeyRequest{
-			KeyName: bucket.Name,
-			Capabilities: []string{"deleteFiles", "listAllBucketNames", "listBuckets",
-				"listFiles", "readBucketEncryption", "readBucketReplications",
-				"readBuckets", "readFiles", "shareFiles", "writeBucketEncryption",
-				"writeBucketReplications", "writeFiles"},
-			BucketId: b2_bucket_id,
-		})
-		if err != nil {
-			log.Error(err, "Failed to create application key")
-		}
-
-		secret := r.createBucketSecret(bucket, applicationKeyCreate)
-
-		if err := r.Create(ctx, secret); err != nil {
-			log.Error(err, "Failed to create new Secret", "Secret.Namespace", secret.Namespace, "Deployment.Name", secret.Name)
-		}
 
 		return nil
 	} else {
@@ -199,23 +169,23 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 
 		bucket_at_b2, err := b2.Bucket(bucket.Name)
 		if err != nil {
-			return fmt.Errorf("Unable to fetch Bucket: %v", err)
+			return fmt.Errorf("unable to fetch Bucket: %v", err)
 		}
 
-		if bucket.Spec.Acl != bucket.Status.AtProvider.Acl || !StringSlicesEqual(bucket.Spec.BucketLifecycle, bucket.Status.AtProvider.BucketLifecycle) {
+		if bucket.Spec.AtProvider.Acl != bucket.Status.AtProvider.Acl || !StringSlicesEqual(bucket.Spec.AtProvider.BucketLifecycle, bucket.Status.AtProvider.BucketLifecycle) {
 			bucket_acl := backblaze.AllPrivate
-			switch bucket.Spec.Acl {
+			switch bucket.Spec.AtProvider.Acl {
 			case "private":
 				bucket_acl = backblaze.AllPrivate
 			case "public":
 				bucket_acl = backblaze.AllPublic
 			}
 
-			update_err := bucket_at_b2.UpdateAll(bucket_acl, make(map[string]string), bucket.Spec.BucketLifecycle, 0)
+			update_err := bucket_at_b2.UpdateAll(bucket_acl, make(map[string]string), bucket.Spec.AtProvider.BucketLifecycle, 0)
 			if update_err != nil {
-				return fmt.Errorf("Unable to update Bucket: %v", update_err)
+				return fmt.Errorf("unable to update Bucket: %v", update_err)
 			} else {
-				bucket.Status.AtProvider = bucket.Spec
+				bucket.Status.AtProvider = bucket.Spec.AtProvider
 			}
 			r.Status().Update(ctx, bucket)
 		}
@@ -225,7 +195,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 	return nil
 }
 
-func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alpha1.Bucket) (ctrl.Result, error) {
+func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alpha2.Bucket) (ctrl.Result, error) {
 	log := r.Log.WithValues("bucket", bucket.Namespace)
 	log.Info("Removing Bucket")
 	// Checking if backblaze secrets are set
@@ -244,40 +214,18 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 		// Remove the finalizer and update the object
 		controllerutil.RemoveFinalizer(bucket, bucketFinalizer)
 		if err := r.Update(ctx, bucket); err != nil {
-			return ctrl.Result{}, fmt.Errorf("Error removing finalizer: %v", err)
+			return ctrl.Result{}, fmt.Errorf("error removing finalizer: %v", err)
 		}
 	} else {
 		// Deleting bucket
 		err := bucket_b2.Delete()
 		if err != nil {
-			log.Info("Error occured while trying to remove bucket (is the bucket empty?)")
+			log.Error(err, "error occured while trying to remove bucket (is the bucket empty?)")
 		} else {
-			// Retriving existing secret
-			existing_secret := &corev1.Secret{}
-			err := r.Client.Get(ctx, types.NamespacedName{
-				Name:      bucket.Spec.BucketWriteConnectionSecretToRef.Name,
-				Namespace: bucket.Spec.BucketWriteConnectionSecretToRef.Namespace},
-				existing_secret,
-			)
-			if err != nil {
-				log.Error(err, "Failed to read existing secret")
-			}
-
-			// Deleting application key on b2
-			_, err = b2.DeleteApplicationKey(string(existing_secret.Data["AWS_ACCESS_KEY_ID"]))
-			if err != nil {
-				log.Error(err, "Failed to delete application key")
-			}
-
-			// Remove secret
-			if err := r.Delete(ctx, existing_secret); err != nil {
-				log.Info("Failed to remove secret")
-			}
-
 			// Remove the finalizer and update the object
 			controllerutil.RemoveFinalizer(bucket, bucketFinalizer)
 			if err := r.Update(ctx, bucket); err != nil {
-				return ctrl.Result{}, fmt.Errorf("Error removing finalizer: %v", err)
+				return ctrl.Result{}, fmt.Errorf("error removing finalizer: %v", err)
 			}
 		}
 	}
@@ -288,7 +236,7 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 // SetupWithManager sets up the controller with the Manager.
 func (r *BucketReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&b2v1alpha1.Bucket{}).
+		For(&b2v1alpha2.Bucket{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
 		Complete(r)
 }

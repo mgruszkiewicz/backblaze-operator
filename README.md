@@ -62,23 +62,42 @@ kustomize build config/default | kubectl delete -f -
 
 ### Example CRD Usage
 
+Creating bucket with lifecycle policies on prefix `/` and `/logs`. Lifecycle policies are optional.
+
 ```yaml
-apiVersion: b2.issei.space/v1alpha1
+apiVersion: b2.issei.space/v1alpha2
 kind: Bucket
 metadata:
   name: my-b2-bucket
 spec:
-  acl: public
-  bucketLifecycle:
-    - fileNamePrefix: "/"
-      daysFromUploadingToHiding: 2
-      daysFromHidingToDeleting: 3
-    - fileNamePrefix: "logs"
-      daysFromUploadingToHiding: 5
-      daysFromHidingToDeleting: 7
+  atProvider:
+    acl: private
+    bucketLifecycle:
+      - fileNamePrefix: "/"
+        daysFromUploadingToHiding: 2
+        daysFromHidingToDeleting: 3
+      - fileNamePrefix: "logs"
+        daysFromUploadingToHiding: 5
+        daysFromHidingToDeleting: 7
+```
+
+Creating keys that will have access to bucket `my-b2-bucket` and will be saved to `new-key` secret in namespace `default`
+```yaml
+apiVersion: b2.issei.space/v1alpha2
+kind: Key
+metadata:
+  name: my-b2-key
+spec:
+  atProvider:
+    bucketName: my-b2-bucket
+    capabilities:
+      - listAllBucketNames
+      - listBuckets
+      - readBuckets
+      - listFiles
   writeConnectionSecretToRef:
-    name: my-bucket-credentials
-    namespace: default
+      name: new-key
+      namespace: default
 ```
 
 ## Contributing
@@ -115,6 +134,11 @@ make manifests
 **NOTE:** Run `make --help` for more information on all potential `make` targets
 
 More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+
+## Troubleshooting
+
+### Unable to create public buckets
+Before you will be able to create public bucket, you need to enter payment details in your Backblaze account (error: `Account has no payment history. Please make a payment before making a public bucket.`).
 
 ## License
 

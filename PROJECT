@@ -17,7 +17,15 @@ resources:
   controller: true
   domain: issei.space
   group: b2
+  kind: Key
+  path: github.com/ihyoudou/backblaze-operator/api/v1alpha2
+  version: v1alpha2
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: issei.space
+  group: b2
   kind: Bucket
-  path: github.com/ihyoudou/backblaze-operator/api/v1alpha1
-  version: v1alpha1
+  path: github.com/ihyoudou/backblaze-operator/api/v1alpha2
+  version: v1alpha2
 version: "3"

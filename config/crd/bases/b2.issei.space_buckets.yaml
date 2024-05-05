@@ -15,7 +15,7 @@ spec:
     singular: bucket
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1alpha2
     schema:
       openAPIV3Schema:
         description: Bucket is the Schema for the buckets API
@@ -35,50 +35,14 @@ spec:
           spec:
             description: BucketSpec defines the desired state of Bucket
             properties:
-              acl:
-                description: Acl defines if content of this bucket should be public
-                  or private
-                type: string
-              bucketLifecycle:
-                items:
-                  description: LifecycleRule instructs the B2 service to automatically
-                    hide and/or delete old files. You can set up rules to do things
-                    like delete old versions of files 30 days after a newer version
-                    was uploaded.
-                  properties:
-                    daysFromHidingToDeleting:
-                      type: integer
-                    daysFromUploadingToHiding:
-                      type: integer
-                    fileNamePrefix:
-                      type: string
-                  required:
-                  - daysFromHidingToDeleting
-                  - daysFromUploadingToHiding
-                  - fileNamePrefix
-                  type: object
-                type: array
-              writeConnectionSecretToRef:
-                properties:
-                  name:
-                    type: string
-                  namespace:
-                    type: string
-                type: object
-            type: object
-          status:
-            description: BucketStatus defines the observed state of Bucket
-            properties:
               atProvider:
-                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                  of cluster Important: Run "make" to regenerate code after modifying
-                  this file'
                 properties:
                   acl:
                     description: Acl defines if content of this bucket should be public
                       or private
                     type: string
                   bucketLifecycle:
+                    description: Define lifecycle rules for objects in bucket
                     items:
                       description: LifecycleRule instructs the B2 service to automatically
                         hide and/or delete old files. You can set up rules to do things
@@ -97,13 +61,39 @@ spec:
                       - fileNamePrefix
                       type: object
                     type: array
-                  writeConnectionSecretToRef:
-                    properties:
-                      name:
-                        type: string
-                      namespace:
-                        type: string
-                    type: object
+                type: object
+            required:
+            - atProvider
+            type: object
+          status:
+            description: BucketStatus defines the observed state of Bucket
+            properties:
+              atProvider:
+                properties:
+                  acl:
+                    description: Acl defines if content of this bucket should be public
+                      or private
+                    type: string
+                  bucketLifecycle:
+                    description: Define lifecycle rules for objects in bucket
+                    items:
+                      description: LifecycleRule instructs the B2 service to automatically
+                        hide and/or delete old files. You can set up rules to do things
+                        like delete old versions of files 30 days after a newer version
+                        was uploaded.
+                      properties:
+                        daysFromHidingToDeleting:
+                          type: integer
+                        daysFromUploadingToHiding:
+                          type: integer
+                        fileNamePrefix:
+                          type: string
+                      required:
+                      - daysFromHidingToDeleting
+                      - daysFromUploadingToHiding
+                      - fileNamePrefix
+                      type: object
+                    type: array
                 type: object
               reconciled:
                 type: boolean
