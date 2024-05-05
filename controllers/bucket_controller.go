@@ -116,7 +116,10 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
 	})
 
-	b2.Debug = true
+	// Enable go-backblaze debuging mode (printing all api requests) if B2_DEBUG env is set to "true"
+	if os.Getenv("B2_DEBUG") == "true" {
+		b2.Debug = true
+	}
 
 	// If bucket was not already reconciled (most likely new CR)
 	if !bucket.Status.Reconciled {

@@ -148,6 +148,11 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
 	})
 
+	// Enable go-backblaze debuging mode (printing all api requests) if B2_DEBUG env is set to "true"
+	if os.Getenv("B2_DEBUG") == "true" {
+		b2.Debug = true
+	}
+
 	// If key was not already reconciled (most likely new CR)
 	if !key.Status.Reconciled || key.Status.ToRecreate {
 		log.Info("Key is not reconciled")
