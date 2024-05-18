@@ -25,7 +25,7 @@ The output will be space-seperated `application-id application-key`
 **Using Helm** 
 
 To install a release named `b2operator` run:
-```
+```bash
 helm upgrade --install backblaze-operator backblaze-operator \
   --set credentials.b2ApplicationId="your-application-id" \
   --set credentials.b2ApplicationKey="your-application-key" \
@@ -33,36 +33,8 @@ helm upgrade --install backblaze-operator backblaze-operator \
   --namespace backblaze-operator --create-namespace \
   --repo https://ihyoudou.github.io/helm-charts
 ```
-
-**Using manifests**
-
-0. Clone this repository  
-
-1. Create Master Application Key in Backblaze dashboard, base64 encode these credentials and put them in `config/manager/secret.yaml`
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: credentials
-type: Opaque
-data:
-  B2_REGION: dXMtd2VzdC0wMDQ=  # us-west-004
-  B2_APPLICATION_ID: ZXhhbXBsZQ==
-  B2_APPLICATION_KEY: ZXhhbXBsZQ==
-
-```
-2. Install Instances of Custom Resources:
-
-```sh
-kustomize build config/default | kubectl apply -f -
-```
-
-### Uninstall CRDs
-To delete the CRDs from the cluster:
-
-```sh
-kustomize build config/default | kubectl delete -f -
-```
+Replace `your-application-id`, `your-application-key` and `us-west-004` with details that match your account.  
+You can view all available values in [helm-charts repo](https://github.com/ihyoudou/helm-charts/tree/main/charts/backblaze-operator).
 
 ### Example CRD Usage
 
