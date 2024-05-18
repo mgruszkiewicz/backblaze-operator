@@ -112,7 +112,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 	}
 	// Initializing backblaze client
 	b2, _ := backblaze.NewB2(backblaze.Credentials{
-		AccountID:      os.Getenv("B2_APPLICATION_ID"),
+		KeyID:          os.Getenv("B2_APPLICATION_ID"),
 		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
 	})
 
@@ -204,7 +204,7 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 	}
 	// Initializing backblaze client
 	b2, _ := backblaze.NewB2(backblaze.Credentials{
-		AccountID:      os.Getenv("B2_APPLICATION_ID"),
+		KeyID:          os.Getenv("B2_APPLICATION_ID"),
 		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
 	})
 

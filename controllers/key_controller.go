@@ -144,7 +144,7 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 
 	// Initializing backblaze client
 	b2, _ := backblaze.NewB2(backblaze.Credentials{
-		AccountID:      os.Getenv("B2_APPLICATION_ID"),
+		KeyID:          os.Getenv("B2_APPLICATION_ID"),
 		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
 	})
 
@@ -263,7 +263,7 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha2.Key
 
 	// Initializing backblaze client
 	b2, _ := backblaze.NewB2(backblaze.Credentials{
-		AccountID:      os.Getenv("B2_APPLICATION_ID"),
+		KeyID:          os.Getenv("B2_APPLICATION_ID"),
 		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
 	})
 
