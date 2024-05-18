@@ -86,7 +86,7 @@ spec:
 The secret will contain `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `bucketName`, `endpoint`, `keyName`.
 
 ### Learn more
-You can find troubleshooting guides and other usefull information in [docs directory](docs/)
+You can find troubleshooting guides and other useful information in [docs directory](docs/)
 
 ### How it works
 This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
