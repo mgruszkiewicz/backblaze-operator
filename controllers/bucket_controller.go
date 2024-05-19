@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const bucketFinalizer = "bucket.b2.issei.space/finalizer"
@@ -58,7 +59,7 @@ type BucketReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
 func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
-	log := r.Log.WithValues("bucket", req.NamespacedName)
+	log := r.Log.WithValues("bucket", req.Name)
 
 	// Reconciling current api version
 	bucket := &b2v1alpha2.Bucket{}
@@ -83,9 +84,8 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		log.Info("Bucket is being deleted")
 		return r.reconcileDelete(ctx, bucket)
 	}
-	r.reconcileCreate(ctx, bucket)
 
-	return ctrl.Result{}, nil
+	return r.reconcileCreate(ctx, bucket)
 }
 
 func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alpha2.Bucket) (ctrl.Result, error) {
@@ -98,7 +98,7 @@ func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alph
 }
 
 func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v1alpha2.Bucket) error {
-	log := r.Log.WithValues("bucket", bucket.Namespace)
+	log := log.FromContext(ctx)
 	// Check if the bucket exists
 	if err := r.Get(ctx, types.NamespacedName{Name: bucket.Name, Namespace: bucket.Namespace}, bucket); err != nil {
 		if !errors.IsNotFound(err) {
@@ -165,7 +165,6 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		return nil
 	} else {
 		// Updating bucket
-		log.Info("Bucket resource exist on cluster, updating state")
 
 		bucket_at_b2, err := b2.Bucket(bucket.Name)
 		if err != nil {
@@ -173,6 +172,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		}
 
 		if bucket.Spec.AtProvider.Acl != bucket.Status.AtProvider.Acl || !StringSlicesEqual(bucket.Spec.AtProvider.BucketLifecycle, bucket.Status.AtProvider.BucketLifecycle) {
+			log.Info("Bucket resource exist on cluster, updating state")
 			bucket_acl := backblaze.AllPrivate
 			switch bucket.Spec.AtProvider.Acl {
 			case "private":
@@ -196,7 +196,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 }
 
 func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alpha2.Bucket) (ctrl.Result, error) {
-	log := r.Log.WithValues("bucket", bucket.Namespace)
+	log := log.FromContext(ctx)
 	log.Info("Removing Bucket")
 	// Checking if backblaze secrets are set
 	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {

@@ -33,6 +33,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const keyFinalizer = "key.b2.issei.space/finalizer"
@@ -75,9 +76,8 @@ func (r *KeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		log.Info("Key is being deleted")
 		return r.reconcileDelete(ctx, key, true)
 	}
-	r.reconcileCreate(ctx, key)
 
-	return ctrl.Result{}, nil
+	return r.reconcileCreate(ctx, key)
 }
 
 func (r *KeyReconciler) reconcileCreate(ctx context.Context, key *b2v1alpha2.Key) (ctrl.Result, error) {
@@ -127,7 +127,7 @@ func (r *KeyReconciler) createKeySecret(key *b2v1alpha2.Key, appkey *backblaze.A
 }
 
 func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.Key) error {
-	log := r.Log.WithValues("key", key.Namespace)
+	log := log.FromContext(ctx)
 	log.Info("create or update key")
 
 	// Check if the key exists
@@ -234,7 +234,7 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 
 func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha2.Key, deleteSecret bool) (ctrl.Result, error) {
 
-	log := r.Log.WithValues("key", key.Namespace)
+	log := log.FromContext(ctx)
 	log.Info("Removing Key")
 
 	if deleteSecret {
