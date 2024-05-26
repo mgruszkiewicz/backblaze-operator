@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const bucketFinalizer = "bucket.b2.issei.space/finalizer"
@@ -58,7 +59,7 @@ type BucketReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
 func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
-	log := r.Log.WithValues("bucket", req.NamespacedName)
+	l := log.FromContext(ctx)
 
 	// Reconciling current api version
 	bucket := &b2v1alpha2.Bucket{}
@@ -74,18 +75,17 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	if !controllerutil.ContainsFinalizer(bucket, bucketFinalizer) {
-		log.Info("Adding Finalizer")
+		l.Info("Adding Finalizer")
 		controllerutil.AddFinalizer(bucket, bucketFinalizer)
 		return ctrl.Result{}, r.Update(ctx, bucket)
 	}
 
 	if !bucket.DeletionTimestamp.IsZero() {
-		log.Info("Bucket is being deleted")
+		l.Info("Bucket is being deleted")
 		return r.reconcileDelete(ctx, bucket)
 	}
-	r.reconcileCreate(ctx, bucket)
 
-	return ctrl.Result{}, nil
+	return r.reconcileCreate(ctx, bucket)
 }
 
 func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alpha2.Bucket) (ctrl.Result, error) {
@@ -98,7 +98,7 @@ func (r *BucketReconciler) reconcileCreate(ctx context.Context, bucket *b2v1alph
 }
 
 func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v1alpha2.Bucket) error {
-	log := r.Log.WithValues("bucket", bucket.Namespace)
+	l := log.FromContext(ctx)
 	// Check if the bucket exists
 	if err := r.Get(ctx, types.NamespacedName{Name: bucket.Name, Namespace: bucket.Namespace}, bucket); err != nil {
 		if !errors.IsNotFound(err) {
@@ -108,7 +108,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 
 	// Checking if backblaze secrets are set
 	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
-		log.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
+		l.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
 	}
 	// Initializing backblaze client
 	b2, _ := backblaze.NewB2(backblaze.Credentials{
@@ -141,14 +141,14 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		}
 
 		if bucket_b2_exist == nil {
-			log.Info("Creating Bucket")
+			l.Info("Creating Bucket")
 
 			// Creating Bucket
 			bucket_b2, bucket_err := b2.CreateBucketWithInfo(bucket.Name, bucket_acl, make(map[string]string), bucket.Spec.AtProvider.BucketLifecycle)
 
 			// TODO: add `no_payment_history` handling in lib
 			if bucket_b2 == nil {
-				log.Info("unable to create bucket, no_payment_history?")
+				l.Info("unable to create bucket, no_payment_history?")
 			}
 
 			if bucket_err != nil {
@@ -156,7 +156,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 			}
 
 		} else {
-			log.Info("Bucket exist at provider, adopting")
+			l.Info("Bucket exist at provider, adopting")
 		}
 		bucket.Status.AtProvider = bucket.Spec.AtProvider
 		bucket.Status.Reconciled = true
@@ -165,7 +165,6 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		return nil
 	} else {
 		// Updating bucket
-		log.Info("Bucket resource exist on cluster, updating state")
 
 		bucket_at_b2, err := b2.Bucket(bucket.Name)
 		if err != nil {
@@ -173,6 +172,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		}
 
 		if bucket.Spec.AtProvider.Acl != bucket.Status.AtProvider.Acl || !StringSlicesEqual(bucket.Spec.AtProvider.BucketLifecycle, bucket.Status.AtProvider.BucketLifecycle) {
+			l.Info("Bucket resource exist on cluster, updating state")
 			bucket_acl := backblaze.AllPrivate
 			switch bucket.Spec.AtProvider.Acl {
 			case "private":
@@ -196,11 +196,11 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 }
 
 func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alpha2.Bucket) (ctrl.Result, error) {
-	log := r.Log.WithValues("bucket", bucket.Namespace)
-	log.Info("Removing Bucket")
+	l := log.FromContext(ctx)
+	l.Info("Removing Bucket")
 	// Checking if backblaze secrets are set
 	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
-		log.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
+		l.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
 	}
 	// Initializing backblaze client
 	b2, _ := backblaze.NewB2(backblaze.Credentials{
@@ -210,7 +210,7 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 
 	bucket_b2, _ := b2.Bucket(bucket.Name)
 	if bucket_b2 == nil {
-		log.Info("Bucket not found")
+		l.Info("Bucket not found")
 		// Remove the finalizer and update the object
 		controllerutil.RemoveFinalizer(bucket, bucketFinalizer)
 		if err := r.Update(ctx, bucket); err != nil {
@@ -220,7 +220,7 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 		// Deleting bucket
 		err := bucket_b2.Delete()
 		if err != nil {
-			log.Error(err, "error occured while trying to remove bucket (is the bucket empty?)")
+			l.Error(err, "error occured while trying to remove bucket (is the bucket empty?)")
 		} else {
 			// Remove the finalizer and update the object
 			controllerutil.RemoveFinalizer(bucket, bucketFinalizer)
