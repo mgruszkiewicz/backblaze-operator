@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	b2v1alpha2 "github.com/ihyoudou/backblaze-operator/api/v1alpha2"
+	controller "github.com/ihyoudou/backblaze-operator/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -143,6 +144,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = (&controller.BucketReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controller").WithName("Bucket"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Bucket")
+		os.Exit(1)
+	}
+	if err = (&controller.KeyReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controller").WithName("Key"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Key")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
