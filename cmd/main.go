@@ -23,6 +23,7 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"github.com/ihyoudou/go-backblaze"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -144,18 +145,36 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initializing backblaze client
+	b2, b2_err := backblaze.NewB2(backblaze.Credentials{
+		KeyID:          os.Getenv("B2_APPLICATION_ID"),
+		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
+	})
+
+	if b2_err != nil {
+		setupLog.Error(err, "unable to authenticate with backblaze")
+		os.Exit(1)
+	}
+
+	// Enable go-backblaze debuging mode (printing all api requests) if B2_DEBUG env is set to "true"
+	if os.Getenv("B2_DEBUG") == "true" {
+		b2.Debug = true
+	}
+
 	if err = (&controller.BucketReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controller").WithName("Bucket"),
-		Scheme: mgr.GetScheme(),
+		Client:    mgr.GetClient(),
+		Log:       ctrl.Log.WithName("controller").WithName("Bucket"),
+		Scheme:    mgr.GetScheme(),
+		Backblaze: b2,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Bucket")
 		os.Exit(1)
 	}
 	if err = (&controller.KeyReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controller").WithName("Key"),
-		Scheme: mgr.GetScheme(),
+		Client:    mgr.GetClient(),
+		Log:       ctrl.Log.WithName("controller").WithName("Key"),
+		Scheme:    mgr.GetScheme(),
+		Backblaze: b2,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Key")
 		os.Exit(1)

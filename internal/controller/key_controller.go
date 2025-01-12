@@ -41,8 +41,9 @@ const keyFinalizer = "key.b2.issei.space/finalizer"
 // KeyReconciler reconciles a Key object
 type KeyReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log       logr.Logger
+	Scheme    *runtime.Scheme
+	Backblaze *backblaze.B2
 }
 
 //+kubebuilder:rbac:groups=b2.issei.space,resources=keys,verbs=get;list;watch;create;update;patch;delete
@@ -137,22 +138,6 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 		}
 	}
 
-	// Checking if backblaze secrets are set
-	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
-		l.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
-	}
-
-	// Initializing backblaze client
-	b2, _ := backblaze.NewB2(backblaze.Credentials{
-		KeyID:          os.Getenv("B2_APPLICATION_ID"),
-		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
-	})
-
-	// Enable go-backblaze debuging mode (printing all api requests) if B2_DEBUG env is set to "true"
-	if os.Getenv("B2_DEBUG") == "true" {
-		b2.Debug = true
-	}
-
 	// If key was not already reconciled (most likely new CR)
 	if !key.Status.Reconciled || key.Status.ToRecreate {
 		l.Info("Key is not reconciled")
@@ -162,7 +147,7 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 		if key.Spec.AtProvider.BucketName != "" || key.Spec.AtProvider.BucketId != "" {
 			// If bucketName or bucketId is defined, creating key will defined bucketId
 			if key.Spec.AtProvider.BucketName != "" {
-				bucket_b2, bucket_b2_err := b2.Bucket(key.Spec.AtProvider.BucketName)
+				bucket_b2, bucket_b2_err := r.Backblaze.Bucket(key.Spec.AtProvider.BucketName)
 				if bucket_b2_err != nil {
 					l.Error(bucket_b2_err, "Failed to find bucket at provider")
 				}
@@ -185,7 +170,7 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 		}
 
 		// Create application key
-		applicationKeyCreate, err := b2.CreateApplicationKey(createKeyRequest)
+		applicationKeyCreate, err := r.Backblaze.CreateApplicationKey(createKeyRequest)
 
 		if err != nil {
 			l.Error(err, "Unable to create application key at provider")
@@ -256,19 +241,8 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha2.Key
 		}
 	}
 
-	// Checking if backblaze secrets are set
-	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
-		l.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
-	}
-
-	// Initializing backblaze client
-	b2, _ := backblaze.NewB2(backblaze.Credentials{
-		KeyID:          os.Getenv("B2_APPLICATION_ID"),
-		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
-	})
-
 	// Deleting application key on b2
-	_, err := b2.DeleteApplicationKey(key.Status.KeyId)
+	_, err := r.Backblaze.DeleteApplicationKey(key.Status.KeyId)
 	if err != nil {
 		l.Error(err, "Failed to delete application key")
 	} else {

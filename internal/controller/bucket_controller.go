@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/go-logr/logr"
 	b2v1alpha2 "github.com/ihyoudou/backblaze-operator/api/v1alpha2"
@@ -39,8 +38,9 @@ const bucketFinalizer = "bucket.b2.issei.space/finalizer"
 // BucketReconciler reconciles a Bucket object
 type BucketReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log       logr.Logger
+	Scheme    *runtime.Scheme
+	Backblaze *backblaze.B2
 }
 
 //+kubebuilder:rbac:groups=b2.issei.space,resources=buckets,verbs=get;list;watch;create;update;patch;delete
@@ -106,21 +106,6 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		}
 	}
 
-	// Checking if backblaze secrets are set
-	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
-		l.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
-	}
-	// Initializing backblaze client
-	b2, _ := backblaze.NewB2(backblaze.Credentials{
-		KeyID:          os.Getenv("B2_APPLICATION_ID"),
-		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
-	})
-
-	// Enable go-backblaze debuging mode (printing all api requests) if B2_DEBUG env is set to "true"
-	if os.Getenv("B2_DEBUG") == "true" {
-		b2.Debug = true
-	}
-
 	// If bucket was not already reconciled (most likely new CR)
 	if !bucket.Status.Reconciled {
 		// Creating new bucket
@@ -134,7 +119,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 			bucket_acl = backblaze.AllPublic
 		}
 		// Checking if bucket doesnt already exist
-		bucket_b2_exist, bucket_b2_exist_err := b2.Bucket(bucket.Name)
+		bucket_b2_exist, bucket_b2_exist_err := r.Backblaze.Bucket(bucket.Name)
 
 		if bucket_b2_exist_err != nil {
 			return fmt.Errorf("unable to fetch Bucket: %v", bucket_b2_exist_err)
@@ -144,7 +129,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 			l.Info("Creating Bucket")
 
 			// Creating Bucket
-			bucket_b2, bucket_err := b2.CreateBucketWithInfo(bucket.Name, bucket_acl, make(map[string]string), bucket.Spec.AtProvider.BucketLifecycle)
+			bucket_b2, bucket_err := r.Backblaze.CreateBucketWithInfo(bucket.Name, bucket_acl, make(map[string]string), bucket.Spec.AtProvider.BucketLifecycle)
 
 			// TODO: add `no_payment_history` handling in lib
 			if bucket_b2 == nil {
@@ -166,7 +151,7 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 	} else {
 		// Updating bucket
 
-		bucket_at_b2, err := b2.Bucket(bucket.Name)
+		bucket_at_b2, err := r.Backblaze.Bucket(bucket.Name)
 		if err != nil {
 			return fmt.Errorf("unable to fetch Bucket: %v", err)
 		}
@@ -198,17 +183,8 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alpha2.Bucket) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 	l.Info("Removing Bucket")
-	// Checking if backblaze secrets are set
-	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
-		l.Info("B2_APPLICATION_ID or B2_APPLICATION_KEY not set")
-	}
-	// Initializing backblaze client
-	b2, _ := backblaze.NewB2(backblaze.Credentials{
-		KeyID:          os.Getenv("B2_APPLICATION_ID"),
-		ApplicationKey: os.Getenv("B2_APPLICATION_KEY"),
-	})
 
-	bucket_b2, _ := b2.Bucket(bucket.Name)
+	bucket_b2, _ := r.Backblaze.Bucket(bucket.Name)
 	if bucket_b2 == nil {
 		l.Info("Bucket not found")
 		// Remove the finalizer and update the object
