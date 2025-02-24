@@ -17,7 +17,7 @@ limitations under the License.
 package v1alpha2
 
 import (
-	backblaze "github.com/ihyoudou/go-backblaze"
+	backblaze "github.com/mgruszkiewicz/go-backblaze"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

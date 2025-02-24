@@ -21,8 +21,8 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	b2v1alpha2 "github.com/ihyoudou/backblaze-operator/api/v1alpha2"
-	"github.com/ihyoudou/go-backblaze"
+	b2v1alpha2 "github.com/mgruszkiewicz/backblaze-operator/api/v1alpha2"
+	"github.com/mgruszkiewicz/go-backblaze"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"

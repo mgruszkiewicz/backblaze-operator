@@ -4,3 +4,4 @@ bin/
 testbin/
 .env
 .github
+docs/

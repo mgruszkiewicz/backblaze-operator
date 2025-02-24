@@ -1,6 +1,6 @@
 package controller
 
-import "github.com/ihyoudou/go-backblaze"
+import "github.com/mgruszkiewicz/go-backblaze"
 
 func StringSlicesEqual(a, b []backblaze.LifecycleRule) bool {
 	if len(a) != len(b) {

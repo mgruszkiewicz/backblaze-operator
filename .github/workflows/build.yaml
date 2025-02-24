@@ -49,18 +49,18 @@ jobs:
 
       - name: Build image
         run: |
-          make docker-buildx IMG=ghcr.io/ihyoudou/backblaze-operator:${{github.ref_name}}
+          make docker-buildx IMG=ghcr.io/mgruszkiewicz/backblaze-operator:${{github.ref_name}}
       
       - name: Build image with tag 'latest'
         run: |
-          docker pull ghcr.io/ihyoudou/backblaze-operator:${{github.ref_name}}
-          docker tag ghcr.io/ihyoudou/backblaze-operator:${{github.ref_name}} ghcr.io/ihyoudou/backblaze-operator:latest
-          docker push ghcr.io/ihyoudou/backblaze-operator:latest
+          docker pull ghcr.io/mgruszkiewicz/backblaze-operator:${{github.ref_name}}
+          docker tag ghcr.io/mgruszkiewicz/backblaze-operator:${{github.ref_name}} ghcr.io/mgruszkiewicz/backblaze-operator:latest
+          docker push ghcr.io/mgruszkiewicz/backblaze-operator:latest
 
       - name: Scan for vulnerabilities
         uses: crazy-max/ghaction-container-scan@v3
         with:
-          image: ghcr.io/ihyoudou/backblaze-operator:${{github.ref_name}}
+          image: ghcr.io/mgruszkiewicz/backblaze-operator:${{github.ref_name}}
           dockerfile: ./Dockerfile
           annotations: true
 

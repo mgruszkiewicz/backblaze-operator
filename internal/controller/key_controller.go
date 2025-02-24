@@ -23,8 +23,8 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
-	b2v1alpha2 "github.com/ihyoudou/backblaze-operator/api/v1alpha2"
-	"github.com/ihyoudou/go-backblaze"
+	b2v1alpha2 "github.com/mgruszkiewicz/backblaze-operator/api/v1alpha2"
+	"github.com/mgruszkiewicz/go-backblaze"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

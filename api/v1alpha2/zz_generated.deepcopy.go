@@ -21,7 +21,7 @@ limitations under the License.
 package v1alpha2
 
 import (
-	go_backblaze "github.com/ihyoudou/go-backblaze"
+	go_backblaze "github.com/mgruszkiewicz/go-backblaze"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 

@@ -30,7 +30,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	b2v1alpha2 "github.com/ihyoudou/backblaze-operator/api/v1alpha2"
+	b2v1alpha2 "github.com/mgruszkiewicz/backblaze-operator/api/v1alpha2"
 	//+kubebuilder:scaffold:imports
 )
 

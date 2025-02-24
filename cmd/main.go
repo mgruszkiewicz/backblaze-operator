@@ -23,7 +23,7 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
-	"github.com/ihyoudou/go-backblaze"
+	"github.com/mgruszkiewicz/go-backblaze"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,8 +36,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	b2v1alpha2 "github.com/ihyoudou/backblaze-operator/api/v1alpha2"
-	controller "github.com/ihyoudou/backblaze-operator/internal/controller"
+	b2v1alpha2 "github.com/mgruszkiewicz/backblaze-operator/api/v1alpha2"
+	controller "github.com/mgruszkiewicz/backblaze-operator/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
 

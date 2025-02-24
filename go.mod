@@ -1,10 +1,10 @@
-module github.com/ihyoudou/backblaze-operator
+module github.com/mgruszkiewicz/backblaze-operator
 
 go 1.22.0
 
 require (
 	github.com/go-logr/logr v1.4.1
-	github.com/ihyoudou/go-backblaze v0.0.0-20231017173531-c411c682f5eb
+	github.com/mgruszkiewicz/go-backblaze v0.0.0-20231017173531-c411c682f5eb
 	github.com/onsi/ginkgo/v2 v2.17.1
 	github.com/onsi/gomega v1.32.0
 	k8s.io/api v0.30.1
