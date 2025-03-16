@@ -1,6 +1,7 @@
 module github.com/mgruszkiewicz/backblaze-operator
 
-go 1.22.0
+go 1.23.3
+
 toolchain go1.23.7
 
 require (
