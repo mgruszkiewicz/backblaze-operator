@@ -105,13 +105,13 @@ func (r *KeyReconciler) createKeySecret(ctx context.Context, key *b2v1alpha2.Key
 
 	// Check if secret exist
 	secret := &corev1.Secret{}
-	err := r.Get(context.TODO(), types.NamespacedName{Name: key.Spec.WriteConnectionSecretToRef.Name, Namespace: key.Spec.WriteConnectionSecretToRef.Namespace}, secret)
+	err := r.Get(context.TODO(), types.NamespacedName{Name: key.Spec.WriteConnectionSecretToRef.Name, Namespace: key.Namespace}, secret)
 	if err != nil {
 		l.Info("Not found existing secret... creating new")
 		secret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      key.Spec.WriteConnectionSecretToRef.Name,
-				Namespace: key.Spec.WriteConnectionSecretToRef.Namespace,
+				Namespace: key.Namespace,
 			},
 			Data: secretData,
 		}
