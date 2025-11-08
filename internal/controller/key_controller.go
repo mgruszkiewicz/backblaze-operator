@@ -227,7 +227,7 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha2.Key
 		existing_secret := &corev1.Secret{}
 		if err := r.Client.Get(ctx, types.NamespacedName{
 			Name:      key.Spec.WriteConnectionSecretToRef.Name,
-			Namespace: key.Spec.WriteConnectionSecretToRef.Namespace},
+			Namespace: key.Namespace},
 			existing_secret,
 		); err != nil {
 			l.Info("Failed to get existing secret at cluster")

@@ -1,8 +1,6 @@
 module github.com/mgruszkiewicz/backblaze-operator
 
-go 1.23.3
-
-toolchain go1.23.7
+go 1.25.4
 
 require (
 	github.com/go-logr/logr v1.4.1
