@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -41,15 +42,17 @@ const keyFinalizer = "key.b2.issei.space/finalizer"
 // KeyReconciler reconciles a Key object
 type KeyReconciler struct {
 	client.Client
-	Log       logr.Logger
-	Scheme    *runtime.Scheme
-	Backblaze *backblaze.B2
+	Log           logr.Logger
+	Scheme        *runtime.Scheme
+	Backblaze     *backblaze.B2
+	EventRecorder record.EventRecorder
 }
 
 //+kubebuilder:rbac:groups=b2.issei.space,resources=keys,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=b2.issei.space,resources=keys/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=b2.issei.space,resources=keys/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -90,8 +93,15 @@ func (r *KeyReconciler) reconcileCreate(ctx context.Context, key *b2v1alpha2.Key
 	return ctrl.Result{}, nil
 }
 
-func (r *KeyReconciler) createKeySecret(ctx context.Context, key *b2v1alpha2.Key, appkey *backblaze.ApplicationKeyResponse) *corev1.Secret {
+func (r *KeyReconciler) createKeySecret(ctx context.Context, key *b2v1alpha2.Key, appkey *backblaze.ApplicationKeyResponse) error {
 	l := log.FromContext(ctx)
+
+	// Determine secret name - use default if not specified
+	secretName := key.Spec.WriteConnectionSecretToRef.Name
+	if secretName == "" {
+		secretName = "b2-secret"
+		l.Info("WriteConnectionSecretToRef.Name not specified, using default secret name", "secretName", secretName)
+	}
 
 	// Secret data
 	secretData := map[string][]byte{
@@ -105,26 +115,34 @@ func (r *KeyReconciler) createKeySecret(ctx context.Context, key *b2v1alpha2.Key
 
 	// Check if secret exist
 	secret := &corev1.Secret{}
-	err := r.Get(context.TODO(), types.NamespacedName{Name: key.Spec.WriteConnectionSecretToRef.Name, Namespace: key.Spec.WriteConnectionSecretToRef.Namespace}, secret)
+	err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: key.Namespace}, secret)
 	if err != nil {
-		l.Info("Not found existing secret... creating new")
-		secret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      key.Spec.WriteConnectionSecretToRef.Name,
-				Namespace: key.Spec.WriteConnectionSecretToRef.Namespace,
-			},
-			Data: secretData,
+		if errors.IsNotFound(err) {
+			l.Info("Not found existing secret... creating new")
+			secret = &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretName,
+					Namespace: key.Namespace,
+				},
+				Data: secretData,
+			}
+			if err := r.Create(ctx, secret); err != nil {
+				l.Error(err, "Failed to create new Secret", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
+				return fmt.Errorf("failed to create secret: %w", err)
+			}
+			return nil
 		}
-	} else {
-		l.Info("Found existing secret with credentials, updating values")
-		secret.Data = secretData
-		err = r.Update(context.TODO(), secret)
-		if err != nil {
-			l.Error(err, "Unable to update existing secret with credentials")
-		}
-
+		return fmt.Errorf("failed to get secret: %w", err)
 	}
-	return secret
+
+	// Secret exists, skip overwriting
+	l.Info("Found existing secret, skipping overwrite to preserve existing data", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
+	if r.EventRecorder != nil {
+		r.EventRecorder.Eventf(key, corev1.EventTypeWarning, "SecretAlreadyExists",
+			"Secret %s/%s already exists and was not overwritten to preserve existing data. If you want to update the secret, delete it first or use a different name.",
+			secret.Namespace, secret.Name)
+	}
+	return nil
 }
 
 func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.Key) error {
@@ -178,9 +196,9 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 
 		if applicationKeyCreate.ApplicationKeyId != "" {
 			l.Info("Got application key id from provider, creating secret")
-			secret := r.createKeySecret(ctx, key, applicationKeyCreate)
-			if err := r.Create(ctx, secret); err != nil {
-				l.Error(err, "Failed to create new Secret", "Secret.Namespace", secret.Namespace, "Deployment.Name", secret.Name)
+			if err := r.createKeySecret(ctx, key, applicationKeyCreate); err != nil {
+				l.Error(err, "Failed to create or update Secret")
+				return err
 			}
 		}
 
@@ -223,11 +241,17 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha2.Key
 	l.Info("Removing Key")
 
 	if deleteSecret {
+		// Determine secret name - use default if not specified
+		secretName := key.Spec.WriteConnectionSecretToRef.Name
+		if secretName == "" {
+			secretName = "b2-secret"
+		}
+
 		// Retriving existing secret
 		existing_secret := &corev1.Secret{}
 		if err := r.Client.Get(ctx, types.NamespacedName{
-			Name:      key.Spec.WriteConnectionSecretToRef.Name,
-			Namespace: key.Spec.WriteConnectionSecretToRef.Namespace},
+			Name:      secretName,
+			Namespace: key.Namespace},
 			existing_secret,
 		); err != nil {
 			l.Info("Failed to get existing secret at cluster")

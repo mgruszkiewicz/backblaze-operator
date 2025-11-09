@@ -59,7 +59,7 @@ spec:
 
 ### Example CRD Usage: Creating a application key
 
-Creating keys with default permissions that will have access to bucket `my-b2-bucket` and will be saved to `new-key` secret in namespace `default`
+Creating keys with default permissions that will have access to bucket `my-b2-bucket` and will be saved to `new-key` secret in the namespace of creation
 ```yaml
 apiVersion: b2.issei.space/v1alpha2
 kind: Key
@@ -83,7 +83,6 @@ spec:
       - writeFiles
   writeConnectionSecretToRef:
       name: new-key
-      namespace: default
 ```
 The secret will contain `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `bucketName`, `endpoint`, `keyName`.
 

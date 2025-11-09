@@ -26,8 +26,6 @@ import (
 type WriteConnectionSecretToRef struct {
 	// Set name of secret where credentials should be set
 	Name string `json:"name,omitempty"`
-	// Set namespace of secret where credentials should be set
-	Namespace string `json:"namespace,omitempty"`
 }
 
 // KeySpec defines the desired state of Key

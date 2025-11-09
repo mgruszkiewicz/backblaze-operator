@@ -16,6 +16,3 @@ spec:
       - listBuckets
       - readBuckets
       - listFiles
-  writeConnectionSecretToRef:
-      name: new-key
-      namespace: default

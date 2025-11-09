@@ -91,10 +91,6 @@ spec:
                   name:
                     description: Set name of secret where credentials should be set
                     type: string
-                  namespace:
-                    description: Set namespace of secret where credentials should
-                      be set
-                    type: string
                 type: object
             type: object
           status:

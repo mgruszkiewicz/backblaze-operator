@@ -162,19 +162,21 @@ func main() {
 	}
 
 	if err = (&controller.BucketReconciler{
-		Client:    mgr.GetClient(),
-		Log:       ctrl.Log.WithName("controller").WithName("Bucket"),
-		Scheme:    mgr.GetScheme(),
-		Backblaze: b2,
+		Client:        mgr.GetClient(),
+		Log:           ctrl.Log.WithName("controller").WithName("Bucket"),
+		Scheme:        mgr.GetScheme(),
+		Backblaze:     b2,
+		EventRecorder: mgr.GetEventRecorderFor("bucket-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Bucket")
 		os.Exit(1)
 	}
 	if err = (&controller.KeyReconciler{
-		Client:    mgr.GetClient(),
-		Log:       ctrl.Log.WithName("controller").WithName("Key"),
-		Scheme:    mgr.GetScheme(),
-		Backblaze: b2,
+		Client:        mgr.GetClient(),
+		Log:           ctrl.Log.WithName("controller").WithName("Key"),
+		Scheme:        mgr.GetScheme(),
+		Backblaze:     b2,
+		EventRecorder: mgr.GetEventRecorderFor("key-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Key")
 		os.Exit(1)
