@@ -90,7 +90,7 @@ func (r *KeyReconciler) reconcileCreate(ctx context.Context, key *b2v1alpha2.Key
 	return ctrl.Result{}, nil
 }
 
-func (r *KeyReconciler) createKeySecret(ctx context.Context, key *b2v1alpha2.Key, appkey *backblaze.ApplicationKeyResponse) *corev1.Secret {
+func (r *KeyReconciler) createKeySecret(ctx context.Context, key *b2v1alpha2.Key, appkey *backblaze.ApplicationKeyResponse) error {
 	l := log.FromContext(ctx)
 
 	// Secret data
@@ -105,26 +105,34 @@ func (r *KeyReconciler) createKeySecret(ctx context.Context, key *b2v1alpha2.Key
 
 	// Check if secret exist
 	secret := &corev1.Secret{}
-	err := r.Get(context.TODO(), types.NamespacedName{Name: key.Spec.WriteConnectionSecretToRef.Name, Namespace: key.Namespace}, secret)
+	err := r.Get(ctx, types.NamespacedName{Name: key.Spec.WriteConnectionSecretToRef.Name, Namespace: key.Namespace}, secret)
 	if err != nil {
-		l.Info("Not found existing secret... creating new")
-		secret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      key.Spec.WriteConnectionSecretToRef.Name,
-				Namespace: key.Namespace,
-			},
-			Data: secretData,
+		if errors.IsNotFound(err) {
+			l.Info("Not found existing secret... creating new")
+			secret = &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      key.Spec.WriteConnectionSecretToRef.Name,
+					Namespace: key.Namespace,
+				},
+				Data: secretData,
+			}
+			if err := r.Create(ctx, secret); err != nil {
+				l.Error(err, "Failed to create new Secret", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
+				return fmt.Errorf("failed to create secret: %w", err)
+			}
+			return nil
 		}
-	} else {
-		l.Info("Found existing secret with credentials, updating values")
-		secret.Data = secretData
-		err = r.Update(context.TODO(), secret)
-		if err != nil {
-			l.Error(err, "Unable to update existing secret with credentials")
-		}
-
+		return fmt.Errorf("failed to get secret: %w", err)
 	}
-	return secret
+
+	// Secret exists, update it
+	l.Info("Found existing secret with credentials, updating values")
+	secret.Data = secretData
+	if err := r.Update(ctx, secret); err != nil {
+		l.Error(err, "Unable to update existing secret with credentials")
+		return fmt.Errorf("failed to update secret: %w", err)
+	}
+	return nil
 }
 
 func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.Key) error {
@@ -178,9 +186,9 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 
 		if applicationKeyCreate.ApplicationKeyId != "" {
 			l.Info("Got application key id from provider, creating secret")
-			secret := r.createKeySecret(ctx, key, applicationKeyCreate)
-			if err := r.Create(ctx, secret); err != nil {
-				l.Error(err, "Failed to create new Secret", "Secret.Namespace", secret.Namespace, "Deployment.Name", secret.Name)
+			if err := r.createKeySecret(ctx, key, applicationKeyCreate); err != nil {
+				l.Error(err, "Failed to create or update Secret")
+				return err
 			}
 		}
 
