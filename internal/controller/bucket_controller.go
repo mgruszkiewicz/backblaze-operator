@@ -23,9 +23,11 @@ import (
 	"github.com/go-logr/logr"
 	b2v1alpha2 "github.com/mgruszkiewicz/backblaze-operator/api/v1alpha2"
 	"github.com/mgruszkiewicz/go-backblaze"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -38,15 +40,17 @@ const bucketFinalizer = "bucket.b2.issei.space/finalizer"
 // BucketReconciler reconciles a Bucket object
 type BucketReconciler struct {
 	client.Client
-	Log       logr.Logger
-	Scheme    *runtime.Scheme
-	Backblaze *backblaze.B2
+	Log           logr.Logger
+	Scheme        *runtime.Scheme
+	Backblaze     *backblaze.B2
+	EventRecorder record.EventRecorder
 }
 
 //+kubebuilder:rbac:groups=b2.issei.space,resources=buckets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=b2.issei.space,resources=buckets/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=b2.issei.space,resources=buckets/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;create;update;patch;delete;watch
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -134,14 +138,31 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 			// TODO: add `no_payment_history` handling in lib
 			if bucket_b2 == nil {
 				l.Info("unable to create bucket, no_payment_history?")
+				if r.EventRecorder != nil {
+					r.EventRecorder.Eventf(bucket, corev1.EventTypeWarning, "BucketCreationFailed",
+						"Failed to create bucket %s. Possible reason: no payment history. Please check your Backblaze account.", bucket.Name)
+				}
 			}
 
 			if bucket_err != nil {
+				if r.EventRecorder != nil {
+					r.EventRecorder.Eventf(bucket, corev1.EventTypeWarning, "BucketCreationFailed",
+						"Failed to create bucket %s: %v", bucket.Name, bucket_err)
+				}
 				return fmt.Errorf("unable to create Bucket: %v", bucket_err)
+			}
+
+			if bucket_b2 != nil && r.EventRecorder != nil {
+				r.EventRecorder.Eventf(bucket, corev1.EventTypeNormal, "BucketCreated",
+					"Successfully created bucket %s with ACL %s", bucket.Name, bucket.Spec.AtProvider.Acl)
 			}
 
 		} else {
 			l.Info("Bucket exist at provider, adopting")
+			if r.EventRecorder != nil {
+				r.EventRecorder.Eventf(bucket, corev1.EventTypeNormal, "BucketAdopted",
+					"Bucket %s already exists at provider and was adopted", bucket.Name)
+			}
 		}
 		bucket.Status.AtProvider = bucket.Spec.AtProvider
 		bucket.Status.Reconciled = true
@@ -168,9 +189,17 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 
 			update_err := bucket_at_b2.UpdateAll(bucket_acl, make(map[string]string), bucket.Spec.AtProvider.BucketLifecycle, 0)
 			if update_err != nil {
+				if r.EventRecorder != nil {
+					r.EventRecorder.Eventf(bucket, corev1.EventTypeWarning, "BucketUpdateFailed",
+						"Failed to update bucket %s: %v", bucket.Name, update_err)
+				}
 				return fmt.Errorf("unable to update Bucket: %v", update_err)
 			} else {
 				bucket.Status.AtProvider = bucket.Spec.AtProvider
+				if r.EventRecorder != nil {
+					r.EventRecorder.Eventf(bucket, corev1.EventTypeNormal, "BucketUpdated",
+						"Successfully updated bucket %s", bucket.Name)
+				}
 			}
 			r.Status().Update(ctx, bucket)
 		}
