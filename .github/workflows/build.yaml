@@ -51,11 +51,11 @@ jobs:
         run: |
           make docker-buildx IMG=ghcr.io/mgruszkiewicz/backblaze-operator:${{github.ref_name}}
       
-      - name: Build image with tag 'latest'
+      - name: Tag image as 'latest'
         run: |
-          docker pull ghcr.io/mgruszkiewicz/backblaze-operator:${{github.ref_name}}
-          docker tag ghcr.io/mgruszkiewicz/backblaze-operator:${{github.ref_name}} ghcr.io/mgruszkiewicz/backblaze-operator:latest
-          docker push ghcr.io/mgruszkiewicz/backblaze-operator:latest
+          docker buildx imagetools create \
+            --tag ghcr.io/mgruszkiewicz/backblaze-operator:latest \
+            ghcr.io/mgruszkiewicz/backblaze-operator:${{github.ref_name}}
 
       - name: Scan for vulnerabilities
         uses: crazy-max/ghaction-container-scan@v3
