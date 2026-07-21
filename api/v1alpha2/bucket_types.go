@@ -46,11 +46,21 @@ type BucketSpec struct {
 type BucketStatus struct {
 	AtProvider BucketSpecAtProvider `json:"atProvider,omitempty"`
 	Reconciled bool                 `json:"reconciled,omitempty"`
+	// Conditions describe the current state of the Bucket, most notably
+	// the Ready condition with the reason for any reconciliation failure.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+// +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=`.status.conditions[?(@.type=="Ready")].reason`
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Bucket is the Schema for the buckets API
 type Bucket struct {

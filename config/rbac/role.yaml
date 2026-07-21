@@ -5,58 +5,6 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - b2.issei.space
-  resources:
-  - buckets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - b2.issei.space
-  resources:
-  - buckets/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - b2.issei.space
-  resources:
-  - buckets/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - b2.issei.space
-  resources:
-  - keys
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - b2.issei.space
-  resources:
-  - keys/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - b2.issei.space
-  resources:
-  - keys/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - ""
   resources:
   - events
@@ -75,3 +23,32 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - b2.issei.space
+  resources:
+  - buckets
+  - keys
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - b2.issei.space
+  resources:
+  - buckets/finalizers
+  - keys/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - b2.issei.space
+  resources:
+  - buckets/status
+  - keys/status
+  verbs:
+  - get
+  - patch
+  - update
