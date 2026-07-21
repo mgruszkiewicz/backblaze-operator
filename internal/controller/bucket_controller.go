@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -25,6 +26,8 @@ import (
 	"github.com/mgruszkiewicz/go-backblaze"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -42,8 +45,24 @@ type BucketReconciler struct {
 	client.Client
 	Log           logr.Logger
 	Scheme        *runtime.Scheme
-	Backblaze     *backblaze.B2
+	Backblaze     B2Client
 	EventRecorder record.EventRecorder
+}
+
+// setReadyCondition records the Ready condition on the Bucket and persists it.
+// Failures to persist are logged only, so callers can still return the
+// original reconcile error.
+func (r *BucketReconciler) setReadyCondition(ctx context.Context, bucket *b2v1alpha2.Bucket, status metav1.ConditionStatus, reason, message string) {
+	meta.SetStatusCondition(&bucket.Status.Conditions, metav1.Condition{
+		Type:               ConditionTypeReady,
+		Status:             status,
+		ObservedGeneration: bucket.Generation,
+		Reason:             reason,
+		Message:            message,
+	})
+	if err := r.Status().Update(ctx, bucket); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update Bucket status")
+	}
 }
 
 //+kubebuilder:rbac:groups=b2.issei.space,resources=buckets,verbs=get;list;watch;create;update;patch;delete
@@ -135,24 +154,35 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 			// Creating Bucket
 			bucket_b2, bucket_err := r.Backblaze.CreateBucketWithInfo(bucket.Name, bucket_acl, make(map[string]string), bucket.Spec.AtProvider.BucketLifecycle)
 
-			// TODO: add `no_payment_history` handling in lib
-			if bucket_b2 == nil {
-				l.Info("unable to create bucket, no_payment_history?")
-				if r.EventRecorder != nil {
-					r.EventRecorder.Eventf(bucket, corev1.EventTypeWarning, "BucketCreationFailed",
-						"Failed to create bucket %s. Possible reason: no payment history. Please check your Backblaze account.", bucket.Name)
-				}
-			}
-
 			if bucket_err != nil {
+				// Surface the real B2 API error (e.g. duplicate_bucket_name,
+				// no_payment_history) instead of guessing at the cause.
+				reason := ReasonBucketCreateFailed
+				var b2err *backblaze.B2Error
+				if stderrors.As(bucket_err, &b2err) && b2err.Code == "duplicate_bucket_name" {
+					reason = ReasonDuplicateBucketName
+				}
+				l.Error(bucket_err, "Unable to create bucket at provider", "reason", reason)
 				if r.EventRecorder != nil {
-					r.EventRecorder.Eventf(bucket, corev1.EventTypeWarning, "BucketCreationFailed",
+					r.EventRecorder.Eventf(bucket, corev1.EventTypeWarning, reason,
 						"Failed to create bucket %s: %v", bucket.Name, bucket_err)
 				}
+				r.setReadyCondition(ctx, bucket, metav1.ConditionFalse, reason,
+					fmt.Sprintf("unable to create bucket at provider: %v", bucket_err))
 				return fmt.Errorf("unable to create Bucket: %v", bucket_err)
 			}
 
-			if bucket_b2 != nil && r.EventRecorder != nil {
+			if bucket_b2 == nil {
+				msg := fmt.Sprintf("provider returned no bucket and no error for %q", bucket.Name)
+				if r.EventRecorder != nil {
+					r.EventRecorder.Eventf(bucket, corev1.EventTypeWarning, ReasonBucketCreateFailed,
+						"Failed to create bucket %s: %s", bucket.Name, msg)
+				}
+				r.setReadyCondition(ctx, bucket, metav1.ConditionFalse, ReasonBucketCreateFailed, msg)
+				return fmt.Errorf("%s", msg)
+			}
+
+			if r.EventRecorder != nil {
 				r.EventRecorder.Eventf(bucket, corev1.EventTypeNormal, "BucketCreated",
 					"Successfully created bucket %s with ACL %s", bucket.Name, bucket.Spec.AtProvider.Acl)
 			}
@@ -166,7 +196,16 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 		}
 		bucket.Status.AtProvider = bucket.Spec.AtProvider
 		bucket.Status.Reconciled = true
-		r.Status().Update(ctx, bucket)
+		meta.SetStatusCondition(&bucket.Status.Conditions, metav1.Condition{
+			Type:               ConditionTypeReady,
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: bucket.Generation,
+			Reason:             ReasonReconciled,
+			Message:            "Bucket reconciled at provider",
+		})
+		if err := r.Status().Update(ctx, bucket); err != nil {
+			return fmt.Errorf("failed to update Bucket status: %w", err)
+		}
 
 		return nil
 	} else {
@@ -179,6 +218,13 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 
 		if bucket.Spec.AtProvider.Acl != bucket.Status.AtProvider.Acl || !StringSlicesEqual(bucket.Spec.AtProvider.BucketLifecycle, bucket.Status.AtProvider.BucketLifecycle) {
 			l.Info("Bucket resource exist on cluster, updating state")
+
+			if bucket_at_b2 == nil {
+				msg := fmt.Sprintf("bucket %q no longer exists at provider, cannot update it", bucket.Name)
+				r.setReadyCondition(ctx, bucket, metav1.ConditionFalse, ReasonBucketNotFound, msg)
+				return fmt.Errorf("%s", msg)
+			}
+
 			bucket_acl := backblaze.AllPrivate
 			switch bucket.Spec.AtProvider.Acl {
 			case "private":
@@ -190,18 +236,29 @@ func (r *BucketReconciler) createOrUpdateBucket(ctx context.Context, bucket *b2v
 			update_err := bucket_at_b2.UpdateAll(bucket_acl, make(map[string]string), bucket.Spec.AtProvider.BucketLifecycle, 0)
 			if update_err != nil {
 				if r.EventRecorder != nil {
-					r.EventRecorder.Eventf(bucket, corev1.EventTypeWarning, "BucketUpdateFailed",
+					r.EventRecorder.Eventf(bucket, corev1.EventTypeWarning, ReasonBucketUpdateFailed,
 						"Failed to update bucket %s: %v", bucket.Name, update_err)
 				}
+				r.setReadyCondition(ctx, bucket, metav1.ConditionFalse, ReasonBucketUpdateFailed,
+					fmt.Sprintf("unable to update bucket at provider: %v", update_err))
 				return fmt.Errorf("unable to update Bucket: %v", update_err)
 			} else {
 				bucket.Status.AtProvider = bucket.Spec.AtProvider
+				meta.SetStatusCondition(&bucket.Status.Conditions, metav1.Condition{
+					Type:               ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					ObservedGeneration: bucket.Generation,
+					Reason:             ReasonReconciled,
+					Message:            "Bucket reconciled at provider",
+				})
 				if r.EventRecorder != nil {
 					r.EventRecorder.Eventf(bucket, corev1.EventTypeNormal, "BucketUpdated",
 						"Successfully updated bucket %s", bucket.Name)
 				}
 			}
-			r.Status().Update(ctx, bucket)
+			if err := r.Status().Update(ctx, bucket); err != nil {
+				return fmt.Errorf("failed to update Bucket status: %w", err)
+			}
 		}
 
 	}
@@ -213,7 +270,12 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 	l := log.FromContext(ctx)
 	l.Info("Removing Bucket")
 
-	bucket_b2, _ := r.Backblaze.Bucket(bucket.Name)
+	// A transient provider error here must not be mistaken for "bucket already
+	// gone", or the finalizer would be removed and the bucket orphaned at B2.
+	bucket_b2, bucket_b2_err := r.Backblaze.Bucket(bucket.Name)
+	if bucket_b2_err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to fetch Bucket during deletion: %v", bucket_b2_err)
+	}
 	if bucket_b2 == nil {
 		l.Info("Bucket not found")
 		// Remove the finalizer and update the object
@@ -226,12 +288,18 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 		err := bucket_b2.Delete()
 		if err != nil {
 			l.Error(err, "error occured while trying to remove bucket (is the bucket empty?)")
-		} else {
-			// Remove the finalizer and update the object
-			controllerutil.RemoveFinalizer(bucket, bucketFinalizer)
-			if err := r.Update(ctx, bucket); err != nil {
-				return ctrl.Result{}, fmt.Errorf("error removing finalizer: %v", err)
+			if r.EventRecorder != nil {
+				r.EventRecorder.Eventf(bucket, corev1.EventTypeWarning, "BucketDeletionFailed",
+					"Failed to delete bucket %s (is the bucket empty?): %v", bucket.Name, err)
 			}
+			// Returning the error requeues the deletion with backoff instead of
+			// leaving the resource stuck silently with its finalizer in place.
+			return ctrl.Result{}, fmt.Errorf("unable to delete Bucket: %v", err)
+		}
+		// Remove the finalizer and update the object
+		controllerutil.RemoveFinalizer(bucket, bucketFinalizer)
+		if err := r.Update(ctx, bucket); err != nil {
+			return ctrl.Result{}, fmt.Errorf("error removing finalizer: %v", err)
 		}
 	}
 

@@ -27,6 +27,7 @@ import (
 	"github.com/mgruszkiewicz/go-backblaze"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -44,8 +45,24 @@ type KeyReconciler struct {
 	client.Client
 	Log           logr.Logger
 	Scheme        *runtime.Scheme
-	Backblaze     *backblaze.B2
+	Backblaze     B2Client
 	EventRecorder record.EventRecorder
+}
+
+// setReadyCondition records the Ready condition on the Key and persists it.
+// Failures to persist are logged only, so callers can still return the
+// original reconcile error.
+func (r *KeyReconciler) setReadyCondition(ctx context.Context, key *b2v1alpha2.Key, status metav1.ConditionStatus, reason, message string) {
+	meta.SetStatusCondition(&key.Status.Conditions, metav1.Condition{
+		Type:               ConditionTypeReady,
+		Status:             status,
+		ObservedGeneration: key.Generation,
+		Reason:             reason,
+		Message:            message,
+	})
+	if err := r.Status().Update(ctx, key); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update Key status")
+	}
 }
 
 //+kubebuilder:rbac:groups=b2.issei.space,resources=keys,verbs=get;list;watch;create;update;patch;delete
@@ -167,7 +184,23 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 			if key.Spec.AtProvider.BucketName != "" {
 				bucket_b2, bucket_b2_err := r.Backblaze.Bucket(key.Spec.AtProvider.BucketName)
 				if bucket_b2_err != nil {
-					l.Error(bucket_b2_err, "Failed to find bucket at provider")
+					l.Error(bucket_b2_err, "Failed to fetch bucket at provider")
+					r.setReadyCondition(ctx, key, metav1.ConditionFalse, ReasonProviderError,
+						fmt.Sprintf("unable to fetch bucket %q at provider: %v", key.Spec.AtProvider.BucketName, bucket_b2_err))
+					return fmt.Errorf("unable to fetch bucket %q at provider: %w", key.Spec.AtProvider.BucketName, bucket_b2_err)
+				}
+				if bucket_b2 == nil {
+					// Bucket() returns (nil, nil) when the bucket does not exist on the account,
+					// e.g. it was not created yet or its creation failed (duplicate name).
+					// Returning an error requeues the Key with backoff until the bucket appears.
+					msg := fmt.Sprintf("bucket %q not found at provider (not created yet, or name unavailable)", key.Spec.AtProvider.BucketName)
+					l.Info(msg)
+					if r.EventRecorder != nil {
+						r.EventRecorder.Eventf(key, corev1.EventTypeWarning, ReasonBucketNotFound,
+							"Bucket %s referenced by Key does not exist at provider", key.Spec.AtProvider.BucketName)
+					}
+					r.setReadyCondition(ctx, key, metav1.ConditionFalse, ReasonBucketNotFound, msg)
+					return fmt.Errorf("%s", msg)
 				}
 				b2_bucket_id = bucket_b2.ID
 			} else {
@@ -192,6 +225,18 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 
 		if err != nil {
 			l.Error(err, "Unable to create application key at provider")
+			if r.EventRecorder != nil {
+				r.EventRecorder.Eventf(key, corev1.EventTypeWarning, ReasonKeyCreationFailed,
+					"Failed to create application key for %s: %v", key.Name, err)
+			}
+			r.setReadyCondition(ctx, key, metav1.ConditionFalse, ReasonKeyCreationFailed,
+				fmt.Sprintf("unable to create application key at provider: %v", err))
+			return fmt.Errorf("unable to create application key at provider: %w", err)
+		}
+		if applicationKeyCreate == nil {
+			msg := fmt.Sprintf("provider returned no application key and no error for %q", key.Name)
+			r.setReadyCondition(ctx, key, metav1.ConditionFalse, ReasonKeyCreationFailed, msg)
+			return fmt.Errorf("%s", msg)
 		}
 
 		if applicationKeyCreate.ApplicationKeyId != "" {
@@ -207,7 +252,16 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 		key.Status.ToRecreate = false
 		key.Status.AtProvider = key.Spec.AtProvider
 		key.Status.KeyId = applicationKeyCreate.ApplicationKeyId
-		r.Status().Update(ctx, key)
+		meta.SetStatusCondition(&key.Status.Conditions, metav1.Condition{
+			Type:               ConditionTypeReady,
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: key.Generation,
+			Reason:             ReasonReconciled,
+			Message:            "Key reconciled at provider",
+		})
+		if err := r.Status().Update(ctx, key); err != nil {
+			return fmt.Errorf("failed to update Key status: %w", err)
+		}
 	} else {
 		// reconciling loop
 		l.Info("Key is reconciled")
@@ -216,17 +270,19 @@ func (r *KeyReconciler) createOrUpdateKey(ctx context.Context, key *b2v1alpha2.K
 			// Updating resource at cluster
 			key.Status.Reconciled = false
 			key.Status.ToRecreate = true
-			r.Status().Update(ctx, key)
-
-			// Deleting key
-			_, err := r.reconcileDelete(ctx, key, false)
-			if err != nil {
-				l.Error(err, "Failed to delete secret")
+			if err := r.Status().Update(ctx, key); err != nil {
+				return fmt.Errorf("failed to update Key status: %w", err)
 			}
 
-			keyerr := r.createOrUpdateKey(ctx, key)
-			if keyerr != nil {
+			// Deleting key
+			if _, err := r.reconcileDelete(ctx, key, false); err != nil {
+				l.Error(err, "Failed to delete key for recreation")
+				return err
+			}
+
+			if keyerr := r.createOrUpdateKey(ctx, key); keyerr != nil {
 				l.Error(keyerr, "Failed to recreate key")
+				return keyerr
 			}
 
 		}
@@ -265,12 +321,13 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha2.Key
 		}
 	}
 
-	// Deleting application key on b2
-	_, err := r.Backblaze.DeleteApplicationKey(key.Status.KeyId)
-	if err != nil {
-		l.Error(err, "Failed to delete application key")
-	} else {
-		l.Info("Deleted Application Key at provider")
+	// Deleting application key on b2, if one was ever created
+	if key.Status.KeyId != "" {
+		if _, err := r.Backblaze.DeleteApplicationKey(key.Status.KeyId); err != nil {
+			l.Error(err, "Failed to delete application key")
+		} else {
+			l.Info("Deleted Application Key at provider")
+		}
 	}
 
 	// Remove the finalizer and update the object
