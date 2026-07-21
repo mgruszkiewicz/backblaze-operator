@@ -191,6 +191,29 @@ var _ = Describe("Key controller", func() {
 		Expect(fake.createdKeyNames).To(ContainElement("key-all-buckets"))
 	})
 
+	It("maps Bucket events to pending Keys referencing that bucket", func() {
+		r := newKeyReconciler(&fakeB2{}, nil)
+
+		waiting := newKey("key-watch-waiting", "watched-bucket", "secret-key-watch-waiting")
+		Expect(k8sClient.Create(ctx, waiting)).To(Succeed())
+
+		other := newKey("key-watch-other", "some-other-bucket", "secret-key-watch-other")
+		Expect(k8sClient.Create(ctx, other)).To(Succeed())
+
+		reconciled := newKey("key-watch-done", "watched-bucket", "secret-key-watch-done")
+		Expect(k8sClient.Create(ctx, reconciled)).To(Succeed())
+		reconciled = getKey("key-watch-done")
+		reconciled.Status.Reconciled = true
+		Expect(k8sClient.Status().Update(ctx, reconciled)).To(Succeed())
+
+		requests := r.keysForBucket(ctx, &b2v1alpha2.Bucket{
+			ObjectMeta: metav1.ObjectMeta{Name: "watched-bucket", Namespace: "default"},
+		})
+		Expect(requests).To(ConsistOf(ctrl.Request{
+			NamespacedName: types.NamespacedName{Name: "key-watch-waiting", Namespace: "default"},
+		}))
+	})
+
 	It("deletes the application key and secret when the Key is deleted", func() {
 		fake := &fakeB2{
 			bucket: &backblaze.Bucket{BucketInfo: &backblaze.BucketInfo{ID: "bucket-id-3", Name: "existing-bucket"}},

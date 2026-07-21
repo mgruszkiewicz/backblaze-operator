@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -310,6 +311,9 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 func (r *BucketReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&b2v1alpha2.Bucket{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
+		// RecoverPanic: a panic (e.g. from an unexpected provider response
+		// deep in the B2 library) becomes a reconcile error with backoff
+		// instead of crashing the whole operator.
+		WithOptions(controller.Options{MaxConcurrentReconciles: 2, RecoverPanic: ptr.To(true)}).
 		Complete(r)
 }

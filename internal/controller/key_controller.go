@@ -32,10 +32,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const keyFinalizer = "key.b2.issei.space/finalizer"
@@ -66,6 +70,7 @@ func (r *KeyReconciler) setReadyCondition(ctx context.Context, key *b2v1alpha2.K
 }
 
 //+kubebuilder:rbac:groups=b2.issei.space,resources=keys,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=b2.issei.space,resources=buckets,verbs=get;list;watch
 //+kubebuilder:rbac:groups=b2.issei.space,resources=keys/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=b2.issei.space,resources=keys/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;create;update;patch;delete
@@ -339,9 +344,41 @@ func (r *KeyReconciler) reconcileDelete(ctx context.Context, key *b2v1alpha2.Key
 	return ctrl.Result{}, nil
 }
 
+// keysForBucket maps a Bucket event to reconcile requests for all Keys that
+// reference that bucket by name and are still waiting to be reconciled, so a
+// Key blocked on a missing bucket retries immediately once the bucket is
+// created instead of waiting out the backoff.
+func (r *KeyReconciler) keysForBucket(ctx context.Context, obj client.Object) []reconcile.Request {
+	bucket, ok := obj.(*b2v1alpha2.Bucket)
+	if !ok {
+		return nil
+	}
+
+	keys := &b2v1alpha2.KeyList{}
+	if err := r.List(ctx, keys); err != nil {
+		log.FromContext(ctx).Error(err, "Unable to list Keys while handling Bucket event", "bucket", bucket.Name)
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, k := range keys.Items {
+		if k.Spec.AtProvider.BucketName == bucket.Name && (!k.Status.Reconciled || k.Status.ToRecreate) {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: k.Name, Namespace: k.Namespace},
+			})
+		}
+	}
+	return requests
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *KeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&b2v1alpha2.Key{}).
+		Watches(&b2v1alpha2.Bucket{}, handler.EnqueueRequestsFromMapFunc(r.keysForBucket)).
+		// A panic (e.g. from an unexpected provider response deep in the B2
+		// library) becomes a reconcile error with backoff instead of
+		// crashing the whole operator.
+		WithOptions(controller.Options{RecoverPanic: ptr.To(true)}).
 		Complete(r)
 }

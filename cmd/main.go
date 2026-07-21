@@ -152,7 +152,7 @@ func main() {
 	})
 
 	if b2_err != nil {
-		setupLog.Error(err, "unable to authenticate with backblaze")
+		setupLog.Error(b2_err, "unable to authenticate with backblaze")
 		os.Exit(1)
 	}
 
