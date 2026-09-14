@@ -56,7 +56,6 @@ var _ = Describe("Bucket E2E", Label("bucket", "e2e"), func() {
 		Expect(live_at_provider).NotTo(BeNil())
 		Expect(string(live_at_provider.BucketType)).To(ContainSubstring("allPrivate"))
 
-
 		// 3. update path — change Spec, waitForBucketReady again,
 		// re-assert at B2.
 		//
@@ -92,7 +91,6 @@ var _ = Describe("Bucket E2E", Label("bucket", "e2e"), func() {
 		live_after_deletion, err := b2.Bucket(bucketName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(live_after_deletion).To(BeNil())
-
 
 	})
 })

@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -70,13 +69,27 @@ var _ = Describe("Key E2E", Label("key", "e2e"), func() {
 		Expect(secret.Data).To(HaveKey("AWS_SECRET_ACCESS_KEY"))
 
 		// 2. Provider-side: key really exists with correct capabilities/scope.
-		// TODO(you): assert via B2 API, e.g. list keys and find got.Status.KeyId,
-		//   then check capabilities == ["listFiles","readFiles"] and bucketId matches.
-		//   Hint: b2 client in helpers.go; key_controller_test.go shows the
-		//   expected Secret keys (AWS_ACCESS_KEY_ID / bucketName).
-		_ = b2 // remove once you use it above
+		bucket, err := b2.Bucket(bucketName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(bucket).NotTo(BeNil())
+		Expect(string(bucket.Name)).To(Equal(bucketName))
 
-		// 3. TODO(you): delete path — Delete the Key, assert the Secret is gone
-		//    (waitForDeletion on Secret) and the provider key is revoked.
+		keys, err := b2.ListApplicationKey(keyName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(keys).To(HaveLen(1),
+		"expected to find provider key %q with ID %q", keyName, got.Status.KeyId)
+
+		keyAtProvider := keys[0]
+		Expect(keyAtProvider.ApplicationKeyId).To(Equal(got.Status.KeyId))
+		Expect(keyAtProvider.BucketId).To(Equal(bucket.ID))
+		Expect(keyAtProvider.Capabilities).To(ConsistOf("listFiles", "readFiles"))
+
+		// 3. delete path
+		fresh_key := getKey(ctx, namespace, keyName)
+		Expect(k8sClient.Delete(ctx, fresh_key)).To(Succeed())
+		waitForDeletion(ctx, fresh_key)
+		keys, err = b2.ListApplicationKey(keyName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(keys).To(HaveLen(0))
 	})
 })

@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/go-logr/logr v1.4.4
-	github.com/mgruszkiewicz/go-backblaze v0.0.0-20260913211555-a5cc8f498473
+	github.com/mgruszkiewicz/go-backblaze v0.0.0-20260914192805-a36613206520
 	github.com/onsi/ginkgo/v2 v2.32.2
 	github.com/onsi/gomega v1.43.0
 	k8s.io/api v0.37.0
