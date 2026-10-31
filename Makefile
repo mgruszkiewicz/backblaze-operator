@@ -48,7 +48,7 @@ endif
 
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
-OPERATOR_SDK_VERSION ?= v1.42.2
+OPERATOR_SDK_VERSION ?= v1.42.3
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
@@ -114,10 +114,65 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
-# Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
-.PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
-test-e2e:
-	go test ./test/e2e/ -v -ginkgo.v
+##@ E2E
+# The e2e suite runs the real operator image in a kind cluster against the real
+# Backblaze B2 API. It creates (and cleans up) buckets and keys with random
+# "e2e-" names on the account behind B2_APPLICATION_ID / B2_APPLICATION_KEY.
+#
+#   source .env && make e2e     # setup + deploy + test + teardown
+#
+# All e2e targets use a dedicated kubeconfig, so they never touch the cluster
+# selected in your current kubectl context.
+KIND_CLUSTER ?= b2-e2e
+E2E_IMG ?= backblaze-operator:e2e
+E2E_KUBECONFIG ?= $(LOCALBIN)/e2e-kubeconfig
+E2E_NAMESPACE ?= b2operator-system
+B2_REGION ?= us-west-004
+E2E_KUBECTL = $(KUBECTL) --kubeconfig $(E2E_KUBECONFIG)
+
+.PHONY: check-b2-env
+check-b2-env:
+	@if [ -z "$$B2_APPLICATION_ID" ] || [ -z "$$B2_APPLICATION_KEY" ]; then \
+		echo "B2_APPLICATION_ID and B2_APPLICATION_KEY must be set (e.g. 'source .env')"; exit 1; \
+	fi
+
+.PHONY: setup-e2e
+setup-e2e: ## Create (or reuse) the local kind cluster for e2e.
+	@mkdir -p $(dir $(E2E_KUBECONFIG))
+	@if kind get clusters | grep -qx "$(KIND_CLUSTER)"; then \
+		echo "Reusing kind cluster $(KIND_CLUSTER)"; \
+		kind export kubeconfig --name $(KIND_CLUSTER) --kubeconfig $(E2E_KUBECONFIG); \
+	else \
+		kind create cluster --name $(KIND_CLUSTER) --kubeconfig $(E2E_KUBECONFIG) --wait 120s; \
+	fi
+
+.PHONY: deploy-e2e
+deploy-e2e: check-b2-env manifests kustomize ## Build the image, load it into kind and deploy the operator with B2 credentials.
+	$(MAKE) docker-build IMG=$(E2E_IMG)
+	kind load docker-image $(E2E_IMG) --name $(KIND_CLUSTER)
+	$(KUSTOMIZE) build test/e2e/config | $(E2E_KUBECTL) apply --server-side --force-conflicts -f -
+	@$(E2E_KUBECTL) -n $(E2E_NAMESPACE) create secret generic b2operator-credentials \
+		--from-literal=B2_APPLICATION_ID="$$B2_APPLICATION_ID" \
+		--from-literal=B2_APPLICATION_KEY="$$B2_APPLICATION_KEY" \
+		--from-literal=B2_REGION="$(B2_REGION)" \
+		--dry-run=client -o yaml | $(E2E_KUBECTL) apply -f -
+	# Restart so a re-loaded image with the same tag and updated credentials are picked up.
+	$(E2E_KUBECTL) -n $(E2E_NAMESPACE) rollout restart deployment/b2operator-controller-manager
+	$(E2E_KUBECTL) -n $(E2E_NAMESPACE) rollout status deployment/b2operator-controller-manager --timeout=180s
+
+.PHONY: test-e2e
+test-e2e: check-b2-env ## Run the e2e suite against the kind cluster (run setup-e2e and deploy-e2e first).
+	KUBECONFIG=$(E2E_KUBECONFIG) go test ./test/e2e/ -v -ginkgo.v -timeout 30m
+
+.PHONY: teardown-e2e
+teardown-e2e: ## Delete the kind e2e cluster.
+	kind delete cluster --name $(KIND_CLUSTER)
+	rm -f $(E2E_KUBECONFIG)
+
+.PHONY: e2e
+e2e: check-b2-env setup-e2e deploy-e2e ## Run the full e2e flow: create cluster, deploy, test, tear down (cluster is kept on failure for debugging).
+	$(MAKE) test-e2e
+	$(MAKE) teardown-e2e
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -170,6 +225,20 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	mkdir -p dist
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default > dist/install.yaml
+
+##@ Helm
+
+# HELM_CHART_DIR points to the chart in the helm-charts repository.
+HELM_CHART_DIR ?= $(shell pwd)/../helm-charts/charts/backblaze-operator
+HELMIFY ?= helmify
+
+.PHONY: helm
+helm: manifests kustomize ## Regenerate the Helm chart in HELM_CHART_DIR with helmify, keeping manual customisations (hack/helm/chart.patch).
+	HELM_CHART_DIR=$(HELM_CHART_DIR) KUSTOMIZE=$(KUSTOMIZE) HELMIFY=$(HELMIFY) hack/helm/helmify.sh generate
+
+.PHONY: helm-patch
+helm-patch: manifests kustomize ## Record manual edits made in HELM_CHART_DIR into hack/helm/chart.patch (run after 'make helm' + hand edits).
+	HELM_CHART_DIR=$(HELM_CHART_DIR) KUSTOMIZE=$(KUSTOMIZE) HELMIFY=$(HELMIFY) hack/helm/helmify.sh patch
 
 ##@ Deployment
 

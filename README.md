@@ -46,6 +46,9 @@ kind: Bucket
 metadata:
   name: my-b2-bucket
 spec:
+  # Use Retain for buckets whose data must survive deletion of this resource.
+  # The default is Delete for compatibility with existing resources.
+  deletionPolicy: Retain
   atProvider:
     acl: private
     bucketLifecycle:

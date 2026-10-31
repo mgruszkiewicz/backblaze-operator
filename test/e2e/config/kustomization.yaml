@@ -1,0 +1,20 @@
+# Overlay used by `make deploy-e2e`: deploys the locally built operator image
+# into the kind cluster. The placeholder credentials Secret from config/manager
+# is kept (so namePrefix rewrites the Deployment's secretRef), and deploy-e2e
+# overwrites it with the B2_* environment variables afterwards.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../../config/default
+images:
+- name: ghcr.io/mgruszkiewicz/backblaze-operator
+  newName: backblaze-operator
+  newTag: e2e
+patches:
+- target:
+    kind: Deployment
+    name: controller-manager
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/imagePullPolicy
+      value: IfNotPresent

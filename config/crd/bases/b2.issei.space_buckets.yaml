@@ -75,6 +75,16 @@ spec:
                       type: object
                     type: array
                 type: object
+              deletionPolicy:
+                default: Delete
+                description: |-
+                  DeletionPolicy controls whether deleting this resource also deletes the
+                  provider bucket. Use Retain for buckets whose data must survive deletion
+                  of this resource. Defaults to Delete for compatibility with existing resources.
+                enum:
+                - Delete
+                - Retain
+                type: string
             required:
             - atProvider
             type: object

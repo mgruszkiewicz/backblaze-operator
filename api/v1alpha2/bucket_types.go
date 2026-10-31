@@ -37,9 +37,27 @@ type BucketSpecAtProvider struct {
 	BucketLifecycle []backblaze.LifecycleRule `json:"bucketLifecycle,omitempty"`
 }
 
+// DeletionPolicy controls what happens to the provider resource when the
+// Kubernetes resource is deleted.
+type DeletionPolicy string
+
+const (
+	// DeletionPolicyDelete deletes the provider resource together with the Kubernetes resource.
+	DeletionPolicyDelete DeletionPolicy = "Delete"
+	// DeletionPolicyRetain keeps the provider resource when the Kubernetes resource is deleted.
+	DeletionPolicyRetain DeletionPolicy = "Retain"
+)
+
 // BucketSpec defines the desired state of Bucket
 type BucketSpec struct {
 	AtProvider BucketSpecAtProvider `json:"atProvider"`
+	// DeletionPolicy controls whether deleting this resource also deletes the
+	// provider bucket. Use Retain for buckets whose data must survive deletion
+	// of this resource. Defaults to Delete for compatibility with existing resources.
+	// +kubebuilder:validation:Enum=Delete;Retain
+	// +kubebuilder:default=Delete
+	// +optional
+	DeletionPolicy DeletionPolicy `json:"deletionPolicy,omitempty"`
 }
 
 // BucketStatus defines the observed state of Bucket
