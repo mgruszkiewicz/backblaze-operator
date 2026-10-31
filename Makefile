@@ -48,7 +48,7 @@ endif
 
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
-OPERATOR_SDK_VERSION ?= v1.42.2
+OPERATOR_SDK_VERSION ?= v1.42.3
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
@@ -115,9 +115,29 @@ test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
-.PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
-test-e2e:
-	go test ./test/e2e/ -v -ginkgo.v
+KIND_CLUSTER ?= b2-e2e
+.PHONY: test-e2e  # Run the e2e tests against the current kube context (operator must be deployed).
+test-e2e: ## Run e2e suite. Requires B2_APPLICATION_ID/B2_APPLICATION_KEY for provider assertions.
+	go test ./test/e2e/ -v -ginkgo.v -timeout 30m
+
+.PHONY: setup-e2e
+setup-e2e: ## Create a local kind cluster for e2e.
+	kind create cluster --name $(KIND_CLUSTER) --wait 60s
+
+.PHONY: deploy-e2e
+deploy-e2e: docker-build ## Build image, load into kind, deploy operator + B2 credentials secret.
+	kind load docker-image ${IMG} --name $(KIND_CLUSTER)
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+	$(KUBECTL) -n b2operator-system create secret generic b2operator-credentials \
+		--from-literal=B2_APPLICATION_ID="$$B2_APPLICATION_ID" \
+		--from-literal=B2_APPLICATION_KEY="$$B2_APPLICATION_KEY" \
+		--dry-run=client -o yaml | $(KUBECTL) apply -f -
+	$(KUBECTL) -n b2operator-system rollout status deployment/b2operator-controller-manager --timeout=180s
+
+.PHONY: teardown-e2e
+teardown-e2e: ## Delete the kind e2e cluster.
+	kind delete cluster --name $(KIND_CLUSTER)
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
