@@ -114,30 +114,65 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
-# Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
+##@ E2E
+# The e2e suite runs the real operator image in a kind cluster against the real
+# Backblaze B2 API. It creates (and cleans up) buckets and keys with random
+# "e2e-" names on the account behind B2_APPLICATION_ID / B2_APPLICATION_KEY.
+#
+#   source .env && make e2e     # setup + deploy + test + teardown
+#
+# All e2e targets use a dedicated kubeconfig, so they never touch the cluster
+# selected in your current kubectl context.
 KIND_CLUSTER ?= b2-e2e
-.PHONY: test-e2e  # Run the e2e tests against the current kube context (operator must be deployed).
-test-e2e: ## Run e2e suite. Requires B2_APPLICATION_ID/B2_APPLICATION_KEY for provider assertions.
-	go test ./test/e2e/ -v -ginkgo.v -timeout 30m
+E2E_IMG ?= backblaze-operator:e2e
+E2E_KUBECONFIG ?= $(LOCALBIN)/e2e-kubeconfig
+E2E_NAMESPACE ?= b2operator-system
+B2_REGION ?= us-west-004
+E2E_KUBECTL = $(KUBECTL) --kubeconfig $(E2E_KUBECONFIG)
+
+.PHONY: check-b2-env
+check-b2-env:
+	@if [ -z "$$B2_APPLICATION_ID" ] || [ -z "$$B2_APPLICATION_KEY" ]; then \
+		echo "B2_APPLICATION_ID and B2_APPLICATION_KEY must be set (e.g. 'source .env')"; exit 1; \
+	fi
 
 .PHONY: setup-e2e
-setup-e2e: ## Create a local kind cluster for e2e.
-	kind create cluster --name $(KIND_CLUSTER) --wait 60s
+setup-e2e: ## Create (or reuse) the local kind cluster for e2e.
+	@mkdir -p $(dir $(E2E_KUBECONFIG))
+	@if kind get clusters | grep -qx "$(KIND_CLUSTER)"; then \
+		echo "Reusing kind cluster $(KIND_CLUSTER)"; \
+		kind export kubeconfig --name $(KIND_CLUSTER) --kubeconfig $(E2E_KUBECONFIG); \
+	else \
+		kind create cluster --name $(KIND_CLUSTER) --kubeconfig $(E2E_KUBECONFIG) --wait 120s; \
+	fi
 
 .PHONY: deploy-e2e
-deploy-e2e: docker-build ## Build image, load into kind, deploy operator + B2 credentials secret.
-	kind load docker-image ${IMG} --name $(KIND_CLUSTER)
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
-	$(KUBECTL) -n b2operator-system create secret generic b2operator-credentials \
+deploy-e2e: check-b2-env manifests kustomize ## Build the image, load it into kind and deploy the operator with B2 credentials.
+	$(MAKE) docker-build IMG=$(E2E_IMG)
+	kind load docker-image $(E2E_IMG) --name $(KIND_CLUSTER)
+	$(KUSTOMIZE) build test/e2e/config | $(E2E_KUBECTL) apply --server-side --force-conflicts -f -
+	@$(E2E_KUBECTL) -n $(E2E_NAMESPACE) create secret generic b2operator-credentials \
 		--from-literal=B2_APPLICATION_ID="$$B2_APPLICATION_ID" \
 		--from-literal=B2_APPLICATION_KEY="$$B2_APPLICATION_KEY" \
-		--dry-run=client -o yaml | $(KUBECTL) apply -f -
-	$(KUBECTL) -n b2operator-system rollout status deployment/b2operator-controller-manager --timeout=180s
+		--from-literal=B2_REGION="$(B2_REGION)" \
+		--dry-run=client -o yaml | $(E2E_KUBECTL) apply -f -
+	# Restart so a re-loaded image with the same tag and updated credentials are picked up.
+	$(E2E_KUBECTL) -n $(E2E_NAMESPACE) rollout restart deployment/b2operator-controller-manager
+	$(E2E_KUBECTL) -n $(E2E_NAMESPACE) rollout status deployment/b2operator-controller-manager --timeout=180s
+
+.PHONY: test-e2e
+test-e2e: check-b2-env ## Run the e2e suite against the kind cluster (run setup-e2e and deploy-e2e first).
+	KUBECONFIG=$(E2E_KUBECONFIG) go test ./test/e2e/ -v -ginkgo.v -timeout 30m
 
 .PHONY: teardown-e2e
 teardown-e2e: ## Delete the kind e2e cluster.
 	kind delete cluster --name $(KIND_CLUSTER)
+	rm -f $(E2E_KUBECONFIG)
+
+.PHONY: e2e
+e2e: check-b2-env setup-e2e deploy-e2e ## Run the full e2e flow: create cluster, deploy, test, tear down (cluster is kept on failure for debugging).
+	$(MAKE) test-e2e
+	$(MAKE) teardown-e2e
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter

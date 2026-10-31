@@ -11,7 +11,7 @@ import (
 )
 
 // Key E2E: creates a Bucket + Key, checks the connection Secret and the
-// provider-side key permissions. Fill in the TODOs for your capabilities.
+// provider-side key scope, capabilities and deletion.
 var _ = Describe("Key E2E", Label("key", "e2e"), func() {
 	var ctx context.Context
 	var namespace string
@@ -77,7 +77,7 @@ var _ = Describe("Key E2E", Label("key", "e2e"), func() {
 		keys, err := b2.ListApplicationKey(keyName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(keys).To(HaveLen(1),
-		"expected to find provider key %q with ID %q", keyName, got.Status.KeyId)
+			"expected to find provider key %q with ID %q", keyName, got.Status.KeyId)
 
 		keyAtProvider := keys[0]
 		Expect(keyAtProvider.ApplicationKeyId).To(Equal(got.Status.KeyId))

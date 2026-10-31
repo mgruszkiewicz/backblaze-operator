@@ -43,7 +43,7 @@ var _ = BeforeSuite(func() {
 
 	// Fail fast with a helpful message when B2 credentials are missing.
 	// Local run: `export B2_APPLICATION_ID=... B2_APPLICATION_KEY=...`
-	// CI run: GitHub Secrets -> env (see .github/workflows/e2e.yaml example in chat).
+	// CI run: GitHub Secrets -> env (see .github/workflows/e2e.yaml).
 	if os.Getenv("B2_APPLICATION_ID") == "" || os.Getenv("B2_APPLICATION_KEY") == "" {
 		fmt.Fprintln(os.Stderr, "WARNING: B2_APPLICATION_ID / B2_APPLICATION_KEY not set; provider-side assertions will Skip")
 	}

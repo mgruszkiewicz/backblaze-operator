@@ -49,3 +49,19 @@ To add a new manual customisation:
 3. `make helm-patch` to record the edit in `hack/helm/chart.patch`, and commit it.
 
 Remember to bump the chart `version` (and `appVersion` when releasing a new operator version) in `Chart.yaml`.
+
+## Running the e2e tests
+
+The e2e suite (`test/e2e`) deploys the locally built operator image into a [kind](https://kind.sigs.k8s.io/) cluster
+and runs it against the **real Backblaze B2 API**. It creates buckets and keys with random `e2e-` names on the account
+behind your credentials and removes them at the end of each test.
+
+```sh
+export B2_APPLICATION_ID=... B2_APPLICATION_KEY=...   # or: set -a; source .env; set +a
+make e2e                                              # setup-e2e + deploy-e2e + test-e2e + teardown-e2e
+```
+
+The individual steps can be run separately while iterating (`make setup-e2e`, `make deploy-e2e`, `make test-e2e`,
+`make teardown-e2e`). The targets use a dedicated kubeconfig (`bin/e2e-kubeconfig`), so they never touch the cluster
+selected in your current kubectl context. In CI the suite runs in `.github/workflows/e2e.yaml` and needs the
+`B2_APPLICATION_ID` / `B2_APPLICATION_KEY` repository secrets.

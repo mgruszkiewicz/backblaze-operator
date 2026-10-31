@@ -13,8 +13,7 @@ import (
 )
 
 // Bucket E2E: exercises the real operator image on a kind cluster against
-// the real B2 API. Fill in the TODO assertions for your settings
-// (acl, lifecycle rules) — see helpers.go and the guide in chat.
+// the real B2 API: create, update (lifecycle rules) and both deletion policies.
 var _ = Describe("Bucket E2E", Label("bucket", "e2e"), func() {
 	var ctx context.Context
 	var namespace string
@@ -92,5 +91,44 @@ var _ = Describe("Bucket E2E", Label("bucket", "e2e"), func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(live_after_deletion).To(BeNil())
 
+	})
+
+	It("keeps the bucket at B2 when deletionPolicy is Retain", func() {
+		requireB2Creds()
+		b2 := newB2Client()
+		bucketName := uniqueName("e2e-ret")
+
+		bucket := &b2v1alpha2.Bucket{
+			ObjectMeta: metav1.ObjectMeta{Name: bucketName, Namespace: namespace},
+			Spec: b2v1alpha2.BucketSpec{
+				DeletionPolicy: b2v1alpha2.DeletionPolicyRetain,
+				AtProvider:     b2v1alpha2.BucketSpecAtProvider{Acl: "private"},
+			},
+		}
+		Expect(k8sClient.Create(ctx, bucket)).To(Succeed())
+
+		// The operator intentionally leaves the bucket behind, so the test has
+		// to remove it from B2 itself.
+		DeferCleanup(func(ctx context.Context) {
+			obj := &b2v1alpha2.Bucket{}
+			if err := k8sClient.Get(ctx, namespacedName(namespace, bucketName), obj); err == nil {
+				_ = k8sClient.Delete(ctx, obj)
+				waitForDeletion(ctx, obj)
+			}
+			if live, err := b2.Bucket(bucketName); err == nil && live != nil {
+				Expect(live.Delete()).To(Succeed())
+			}
+		})
+
+		waitForBucketReady(ctx, namespace, bucketName)
+
+		fresh := getBucket(ctx, namespace, bucketName)
+		Expect(fresh.Spec.DeletionPolicy).To(Equal(b2v1alpha2.DeletionPolicyRetain))
+		Expect(k8sClient.Delete(ctx, fresh)).To(Succeed())
+		waitForDeletion(ctx, fresh)
+
+		live, err := b2.Bucket(bucketName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(live).NotTo(BeNil(), "bucket %q must survive deletion of the Bucket resource", bucketName)
 	})
 })

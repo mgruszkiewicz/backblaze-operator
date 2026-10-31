@@ -1,0 +1,73 @@
+name: E2E
+
+# Runs the operator in a kind cluster against the real Backblaze B2 API.
+# Requires the repository secrets B2_APPLICATION_ID and B2_APPLICATION_KEY
+# (and optionally B2_REGION). Buckets/keys created by the suite use random
+# "e2e-" names and are removed at the end of each spec.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    # Secrets are not available to pull requests from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 45
+    env:
+      B2_APPLICATION_ID: ${{ secrets.B2_APPLICATION_ID }}
+      B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+      B2_REGION: ${{ secrets.B2_REGION || 'us-west-004' }}
+
+    steps:
+      - name: Check B2 credentials
+        id: creds
+        run: |
+          if [ -z "$B2_APPLICATION_ID" ] || [ -z "$B2_APPLICATION_KEY" ]; then
+            echo "::notice::B2_APPLICATION_ID / B2_APPLICATION_KEY secrets are not set, skipping e2e tests"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.creds.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        if: steps.creds.outputs.enabled == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install kind
+        if: steps.creds.outputs.enabled == 'true'
+        uses: helm/kind-action@v1
+        with:
+          install_only: true
+
+      - name: Create cluster and deploy operator
+        if: steps.creds.outputs.enabled == 'true'
+        run: make setup-e2e deploy-e2e
+
+      - name: Run e2e tests
+        if: steps.creds.outputs.enabled == 'true'
+        run: make test-e2e
+
+      - name: Dump operator logs
+        if: failure() && steps.creds.outputs.enabled == 'true'
+        run: |
+          kubectl --kubeconfig bin/e2e-kubeconfig -n b2operator-system get pods -o wide || true
+          kubectl --kubeconfig bin/e2e-kubeconfig -n b2operator-system logs deployment/b2operator-controller-manager --tail=-1 || true
+
+      - name: Tear down
+        if: always() && steps.creds.outputs.enabled == 'true'
+        run: make teardown-e2e
