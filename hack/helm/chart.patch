@@ -1,0 +1,60 @@
+--- a/templates/credentials.yaml
++++ b/templates/credentials.yaml
+@@ -1,3 +1,4 @@
++{{- if not .Values.credentials.secret.useSecret -}}
+ apiVersion: v1
+ kind: Secret
+ metadata:
+@@ -12,3 +13,4 @@
+   B2_REGION: {{ required "credentials.b2Region is required" .Values.credentials.b2Region
+     | b64enc | quote }}
+ type: Opaque
++{{- end -}}
+--- a/templates/deployment.yaml
++++ b/templates/deployment.yaml
+@@ -31,7 +31,7 @@
+           value: {{ quote .Values.kubernetesClusterDomain }}
+         envFrom:
+         - secretRef:
+-            name: {{ include "backblaze-operator.fullname" . }}-credentials
++            name: {{ include "backblaze-operator.secretName" . }}
+         image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag
+           | default .Chart.AppVersion }}
+         livenessProbe:
+--- a/values.yaml
++++ b/values.yaml
+@@ -1,3 +1,7 @@
++# -- Override the name of the chart
++nameOverride: ""
++# -- Override the full name of the release
++fullnameOverride: ""
+ controllerManager:
+   manager:
+     args:
+@@ -19,16 +23,26 @@
+       requests:
+         cpu: 10m
+         memory: 64Mi
++  # Node selector for pod assignment
+   nodeSelector: {}
++  # Pod-level security context
+   podSecurityContext:
+     runAsNonRoot: true
+   replicas: 1
+   tolerations: []
+   topologySpreadConstraints: []
+ credentials:
++  # -- Backblaze B2 Application ID
+   b2ApplicationId: ""
++  # -- Backblaze B2 Application Key
+   b2ApplicationKey: ""
++  # -- Backblaze B2 Region
+   b2Region: ""
++  secret:
++    # -- Use an existing secret instead of creating one
++    useSecret: false
++    # -- Name of the existing secret to use (required if useSecret is true)
++    name: ""
+ kubernetesClusterDomain: cluster.local
+ metricsService:
+   ports:

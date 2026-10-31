@@ -171,6 +171,20 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default > dist/install.yaml
 
+##@ Helm
+
+# HELM_CHART_DIR points to the chart in the helm-charts repository.
+HELM_CHART_DIR ?= $(shell pwd)/../helm-charts/charts/backblaze-operator
+HELMIFY ?= helmify
+
+.PHONY: helm
+helm: manifests kustomize ## Regenerate the Helm chart in HELM_CHART_DIR with helmify, keeping manual customisations (hack/helm/chart.patch).
+	HELM_CHART_DIR=$(HELM_CHART_DIR) KUSTOMIZE=$(KUSTOMIZE) HELMIFY=$(HELMIFY) hack/helm/helmify.sh generate
+
+.PHONY: helm-patch
+helm-patch: manifests kustomize ## Record manual edits made in HELM_CHART_DIR into hack/helm/chart.patch (run after 'make helm' + hand edits).
+	HELM_CHART_DIR=$(HELM_CHART_DIR) KUSTOMIZE=$(KUSTOMIZE) HELMIFY=$(HELMIFY) hack/helm/helmify.sh patch
+
 ##@ Deployment
 
 ifndef ignore-not-found
