@@ -271,6 +271,15 @@ func (r *BucketReconciler) reconcileDelete(ctx context.Context, bucket *b2v1alph
 	l := log.FromContext(ctx)
 	l.Info("Removing Bucket")
 
+	if bucket.Spec.DeletionPolicy == b2v1alpha2.DeletionPolicyRetain {
+		l.Info("DeletionPolicy is Retain, leaving bucket at provider")
+		controllerutil.RemoveFinalizer(bucket, bucketFinalizer)
+		if err := r.Update(ctx, bucket); err != nil {
+			return ctrl.Result{}, fmt.Errorf("error removing finalizer: %w", err)
+		}
+		return ctrl.Result{}, nil
+	}
+
 	// A transient provider error here must not be mistaken for "bucket already
 	// gone", or the finalizer would be removed and the bucket orphaned at B2.
 	bucket_b2, bucket_b2_err := r.Backblaze.Bucket(bucket.Name)

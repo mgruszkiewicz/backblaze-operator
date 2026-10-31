@@ -166,4 +166,31 @@ var _ = Describe("Bucket controller", func() {
 		err = k8sClient.Get(ctx, types.NamespacedName{Name: "bucket-delete-err", Namespace: "default"}, &b2v1alpha2.Bucket{})
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
+
+	It("defaults deletionPolicy to Delete", func() {
+		Expect(k8sClient.Create(ctx, newBucket("bucket-default-policy"))).To(Succeed())
+		Expect(getBucket("bucket-default-policy").Spec.DeletionPolicy).To(Equal(b2v1alpha2.DeletionPolicyDelete))
+	})
+
+	It("retains the provider bucket when deletionPolicy is Retain", func() {
+		fake := &fakeB2{
+			createBucketResp: &backblaze.Bucket{BucketInfo: &backblaze.BucketInfo{ID: "bucket-id-retain", Name: "bucket-retain"}},
+		}
+		r := newBucketReconciler(fake, nil)
+		bucket := newBucket("bucket-retain")
+		bucket.Spec.DeletionPolicy = b2v1alpha2.DeletionPolicyRetain
+		Expect(k8sClient.Create(ctx, bucket)).To(Succeed())
+		_, err := reconcileBucket(r, bucket.Name)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = reconcileBucket(r, bucket.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(k8sClient.Delete(ctx, getBucket(bucket.Name))).To(Succeed())
+		// The provider must not be consulted at all: any call would fail.
+		fake.bucketErr = &backblaze.B2Error{Code: "service_unavailable", Message: "must not be called", Status: 503}
+		_, err = reconcileBucket(r, bucket.Name)
+		Expect(err).NotTo(HaveOccurred())
+		err = k8sClient.Get(ctx, types.NamespacedName{Name: bucket.Name, Namespace: "default"}, &b2v1alpha2.Bucket{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
 })

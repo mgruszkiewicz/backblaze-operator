@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/created-by: b2operator
   name: bucket-sample
 spec:
+  deletionPolicy: Retain
   atProvider:
     acl: public
     bucketLifecycle:
